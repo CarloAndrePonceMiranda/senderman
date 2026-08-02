@@ -16,9 +16,6 @@ users.json
 senderman_registry.sqlite3
 backups/
 
-# Local helpers de publicación
-/local-tools/
-
 # Editors and OS
 .vscode/
 .idea/

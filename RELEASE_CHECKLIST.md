@@ -4,7 +4,7 @@ Usa esta lista antes de publicar una nueva versión en un repo privado de produc
 
 ## Antes de crear la release
 
-- Ejecuta `bash local-tools/release_check.sh`.
+- Ejecuta `bash tools/release_check.sh`.
 - Verifica que `git status` esté limpio.
 - Confirma que `master` apunta al último commit estable.
 - Revisa que el cambio corresponda a un feature, bugfix o hotfix correcto.
@@ -26,12 +26,12 @@ Usa esta lista antes de publicar una nueva versión en un repo privado de produc
 - Copia `.env.example` a `.env` y ajusta valores locales.
 - Inicia el panel con el método elegido: manual o `systemd`.
 - Verifica acceso web, login básico, carga de logs y control de servicio.
-- Prueba el flujo de actualización con `bash ./update_ubuntu.sh`.
+- Prueba el flujo de actualización con `bash tools/update_ubuntu.sh`.
 
 ## Criterios mínimos de aceptación
 
 - La UI carga sin errores y el backend responde en `http://localhost:8080`.
-- `bash ./update_ubuntu.sh` termina sin fallos y no rompe `.env`.
+- `bash tools/update_ubuntu.sh` termina sin fallos y no rompe `.env`.
 - El servicio `senderman-ftp-admin` arranca y reinicia correctamente.
 - Los archivos de release están limitados a código, docs y scripts necesarios.
 

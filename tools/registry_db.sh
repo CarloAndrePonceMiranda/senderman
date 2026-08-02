@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 usage() {
   cat <<'EOF'
 Uso:
-  bash registry_db.sh backup [ruta-destino]
-  bash registry_db.sh restore <archivo-respaldo>
-  bash registry_db.sh status
+  bash tools/registry_db.sh backup [ruta-destino]
+  bash tools/registry_db.sh restore <archivo-respaldo>
+  bash tools/registry_db.sh status
 
 Comandos:
   backup   Crea una copia del registro SQLite en backups/
@@ -79,30 +79,24 @@ restore_registry() {
 
   python3 - "$source" "$registry_db" <<'PY'
 from pathlib import Path
-import shutil
 import sqlite3
 import sys
 
 source = Path(sys.argv[1])
 destination = Path(sys.argv[2])
-temp = destination.with_suffix(destination.suffix + '.tmp')
-
-with sqlite3.connect(source) as conn:
-    conn.execute('SELECT name FROM sqlite_master LIMIT 1')
-
-shutil.copy2(source, temp)
-temp.replace(destination)
-print(f"Registro restaurado en {destination}")
+backup = sqlite3.connect(source)
+with sqlite3.connect(destination) as conn:
+    backup.backup(conn)
+backup.close()
+print(f"Registro restaurado desde {source}")
 PY
 }
 
-show_status() {
+status_registry() {
   if [ -f "$registry_db" ]; then
-    echo "Registro SQLite: $repo_root/$registry_db"
-    echo "Estado: presente"
+    echo "Registro activo: $repo_root/$registry_db"
   else
-    echo "Registro SQLite: $repo_root/$registry_db"
-    echo "Estado: no existe"
+    echo "No existe $registry_db"
   fi
 }
 
@@ -114,13 +108,9 @@ case "$command" in
     restore_registry "${1:-}"
     ;;
   status)
-    show_status
-    ;;
-  -h|--help|help)
-    usage
+    status_registry
     ;;
   *)
-    echo "error: comando desconocido: $command"
     usage
     exit 1
     ;;

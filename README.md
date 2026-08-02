@@ -15,8 +15,8 @@ Resumen rápido:
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Si después publicas cambios, usa `./update_ubuntu.sh` para traerlos y reinstalar dependencias.
-Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release_check.sh` para validar que el árbol está listo.
+Si después publicas cambios, usa `bash tools/update_ubuntu.sh` para traerlos y reinstalar dependencias.
+Antes de publicar una versión, ejecuta `bash tools/release_check.sh` para validar que el árbol está listo.
 
 ## Checklist de entrega
 
@@ -27,7 +27,7 @@ Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release
 - `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
-- `is.sh` es un alias local para el mismo instalador.
+- `tools/is.sh` es un alias local para el mismo instalador.
 
 ## Qué incluye
 
@@ -48,15 +48,20 @@ ftp-admin/
 ├── README.md
 ├── DEPLOY.md
 ├── install.sh
-├── is.sh
-├── setup_ubuntu.sh
 ├── RELEASE_CHECKLIST.md
 ├── static/
 │   ├── css/
 │   │   └── app.css
 │   └── js/
 │       └── app.js
-├── local-tools/  (ignorado por Git)
+├── tools/
+│   ├── is.sh
+│   ├── maintenance.sh
+│   ├── registry_db.sh
+│   ├── release_check.sh
+│   ├── setup_ubuntu.sh
+│   ├── update.sh
+│   └── update_ubuntu.sh
 └── templates/
     └── index.html
 ```
@@ -215,27 +220,25 @@ Valores por defecto incluidos en `.env.example`.
 
 ## Scripts de administración
 
-Los helpers de operación para el usuario final viven en la raíz del repo:
+Los helpers de operación viven en `tools/`:
 
-- `./update_ubuntu.sh`
-- `./registry_db.sh`
-- `./maintenance.sh`
-
-`./update.sh` sigue existiendo como alias hacia `./update_ubuntu.sh`.
-
-El helper privado de publicación sigue en `local-tools/`:
-
-- `local-tools/release_check.sh`
+- `tools/update_ubuntu.sh`
+- `tools/registry_db.sh`
+- `tools/maintenance.sh`
+- `tools/release_check.sh`
+- `tools/is.sh`
+- `tools/setup_ubuntu.sh`
+- `tools/update.sh`
 
 Los archivos de respaldo se guardan en `backups/`, que está ignorado por Git.
 
 Para respaldar o restaurar el registro SQLite:
 
 ```bash
-bash ./registry_db.sh backup
-bash ./registry_db.sh restore backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
-bash ./registry_db.sh status
-bash ./maintenance.sh
+bash tools/registry_db.sh backup
+bash tools/registry_db.sh restore backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
+bash tools/registry_db.sh status
+bash tools/maintenance.sh
 ```
 
 ---
