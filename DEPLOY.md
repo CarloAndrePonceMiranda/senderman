@@ -36,7 +36,7 @@ El registro de usuarios se guarda en `senderman_registry.sqlite3`; si vienes de 
 Cuando publiques cambios nuevos en GitHub, ejecuta:
 
 ```bash
-bash local-tools/update_ubuntu.sh
+bash ./update.sh
 ```
 
 Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.
@@ -44,7 +44,7 @@ Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servi
 Si quieres una actualización más segura, usa:
 
 ```bash
-bash local-tools/maintenance.sh
+bash ./maintenance.sh
 ```
 
 Ese helper crea un respaldo del registro SQLite antes de actualizar y te deja una pista de restauración si algo falla.
@@ -68,9 +68,9 @@ bash local-tools/release_check.sh --allow-dirty v1.1.1
 Si necesitas guardar o restaurar el estado de usuarios, usa:
 
 ```bash
-bash local-tools/registry_db.sh backup
-bash local-tools/registry_db.sh restore local-tools/backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
-bash local-tools/registry_db.sh status
+bash ./registry_db.sh backup
+bash ./registry_db.sh restore backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
+bash ./registry_db.sh status
 ```
 
 ## Arranque manual

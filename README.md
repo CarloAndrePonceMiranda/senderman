@@ -15,7 +15,7 @@ Resumen rápido:
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Si después publicas cambios, usa tu copia privada de `local-tools/update_ubuntu.sh` para traerlos y reinstalar dependencias.
+Si después publicas cambios, usa `./update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release_check.sh` para validar que el árbol está listo.
 
 ## Checklist de entrega
@@ -24,7 +24,7 @@ Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release
 - `master` es la rama principal.
 - Existe el commit inicial y la etiqueta `v1.0.0`.
 - `.env` no se sube al repositorio.
-- `senderman_registry.sqlite3`, `users.json` heredado y `panel.log` siguen fuera de Git.
+- `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
 - `is.sh` es un alias local para el mismo instalador.
@@ -213,24 +213,27 @@ El backend lee estas variables desde `.env` o variables de entorno:
 
 Valores por defecto incluidos en `.env.example`.
 
-## Scripts privados
+## Scripts de administración
 
-Los helpers de publicación y actualización viven en `local-tools/`:
+Los helpers de operación para el usuario final viven en la raíz del repo:
 
-- `local-tools/update_ubuntu.sh`
+- `./update.sh`
+- `./registry_db.sh`
+- `./maintenance.sh`
+
+El helper privado de publicación sigue en `local-tools/`:
+
 - `local-tools/release_check.sh`
-- `local-tools/registry_db.sh`
-- `local-tools/maintenance.sh`
 
-No se versionan porque `local-tools/` está ignorado por Git.
+Los archivos de respaldo se guardan en `backups/`, que está ignorado por Git.
 
 Para respaldar o restaurar el registro SQLite:
 
 ```bash
-bash local-tools/registry_db.sh backup
-bash local-tools/registry_db.sh restore local-tools/backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
-bash local-tools/registry_db.sh status
-bash local-tools/maintenance.sh
+bash ./registry_db.sh backup
+bash ./registry_db.sh restore backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
+bash ./registry_db.sh status
+bash ./maintenance.sh
 ```
 
 ---
@@ -323,7 +326,7 @@ Si cambias la ruta del repositorio, edita `WorkingDirectory` y `ExecStart` en el
 ## Para compartir el proyecto en GitHub
 
 1. Verifica que `.env` no tenga secretos que no quieras compartir.
-2. Confirma que `senderman_registry.sqlite3`, `users.json` y `panel.log` no se suban.
+2. Confirma que `senderman_registry.sqlite3`, `users.json`, `panel.log` y `backups/` no se suban.
 3. Mantén el repositorio privado si contiene configuración sensible.
 4. Si tu compa va a desplegarlo, solo necesita clonar, crear `.env`, instalar dependencias y arrancar `main.py`.
 

@@ -14,8 +14,9 @@ venv/
 panel.log
 users.json
 senderman_registry.sqlite3
+backups/
 
-# Local helpers de publicación/actualización
+# Local helpers de publicación
 /local-tools/
 
 # Editors and OS
