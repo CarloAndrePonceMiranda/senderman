@@ -3,6 +3,26 @@
 Panel web de administración para el servidor FTPS/SFTP **vsftpd** en `senderman`.  
 Construido con **FastAPI + WebSockets + Bootstrap 5 Dark**.
 
+## Despliegue rápido
+
+Si solo quieres dejarlo funcionando en Ubuntu, usa la guía corta en [DEPLOY.md](DEPLOY.md).
+
+Resumen rápido:
+
+1. Clona el repositorio y entra al directorio.
+2. Ejecuta `bash setup_ubuntu.sh`.
+3. Copia `.env.example` a `.env` y ajusta `ADMIN_PASS`.
+4. Arranca el panel con `sudo systemctl enable --now senderman-ftp-admin`.
+5. Abre `http://localhost:8080` y verifica el estado del servicio.
+
+## Checklist de entrega
+
+- `master` es la rama principal.
+- Existe el commit inicial y la etiqueta `v1.0.0`.
+- `.env` no se sube al repositorio.
+- `users.json` y `panel.log` siguen fuera de Git.
+- El panel puede arrancar manualmente o como servicio systemd.
+
 ## Qué incluye
 
 - Estado del servicio y control de `vsftpd`.
