@@ -41,6 +41,14 @@ bash local-tools/update_ubuntu.sh
 
 Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.
 
+Si quieres una actualización más segura, usa:
+
+```bash
+bash local-tools/maintenance.sh
+```
+
+Ese helper crea un respaldo del registro SQLite antes de actualizar y te deja una pista de restauración si algo falla.
+
 ## Publicación
 
 Antes de crear un tag o una GitHub Release, ejecuta:

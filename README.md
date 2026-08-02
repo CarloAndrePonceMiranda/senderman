@@ -220,6 +220,7 @@ Los helpers de publicación y actualización viven en `local-tools/`:
 - `local-tools/update_ubuntu.sh`
 - `local-tools/release_check.sh`
 - `local-tools/registry_db.sh`
+- `local-tools/maintenance.sh`
 
 No se versionan porque `local-tools/` está ignorado por Git.
 
@@ -229,6 +230,7 @@ Para respaldar o restaurar el registro SQLite:
 bash local-tools/registry_db.sh backup
 bash local-tools/registry_db.sh restore local-tools/backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
 bash local-tools/registry_db.sh status
+bash local-tools/maintenance.sh
 ```
 
 ---
