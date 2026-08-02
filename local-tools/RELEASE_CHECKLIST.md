@@ -4,7 +4,7 @@ Usa esta lista antes de publicar una nueva versión en un repo privado de produc
 
 ## Antes de crear la release
 
-- Ejecuta `bash tools/release_check.sh`.
+- Ejecuta `bash local-tools/release_check.sh`.
 - Verifica que `git status` esté limpio.
 - Confirma que `master` apunta al último commit estable.
 - Revisa que el cambio corresponda a un feature, bugfix o hotfix correcto.
