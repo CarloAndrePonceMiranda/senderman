@@ -1,0 +1,17 @@
+[Unit]
+Description=Senderman FTP Admin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mr-robot/ftp-admin
+EnvironmentFile=/home/mr-robot/ftp-admin/.env
+ExecStart=/usr/bin/env bash -lc 'cd /home/mr-robot/ftp-admin && exec .venv/bin/python main.py'
+Restart=on-failure
+RestartSec=5
+User=mr-robot
+Group=mr-robot
+
+[Install]
+WantedBy=multi-user.target
