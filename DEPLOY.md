@@ -15,18 +15,18 @@ Esta guía deja el panel funcionando en una máquina Ubuntu con el mínimo de pa
 ```bash
 git clone <URL_DE_TU_REPO>
 cd ftp-admin
-bash install_secure.sh --service
+bash install.sh --service
 ```
 
 Si prefieres instalar sin habilitar el servicio aún:
 
 ```bash
-bash install_secure.sh
+bash install.sh
 ```
 
 ## Configuración
 
-`install_secure.sh` crea `.env` con permisos 600 y te pide revisar `ADMIN_PASS` antes de continuar.
+`install.sh` crea `.env` con permisos 600 y te pide revisar `ADMIN_PASS` antes de continuar.
 Si cambias rutas o usuario, revisa también el archivo `/etc/sudoers.d/ftp-admin`.
 
 ## Actualización

@@ -22,7 +22,7 @@ Usa esta lista antes de publicar una nueva versión en un repo privado de produc
 ## Probar en entorno privado
 
 - Clona el repo en una máquina limpia o VM de Ubuntu.
-- Ejecuta `bash install_secure.sh --service`.
+- Ejecuta `bash install.sh --service`.
 - Copia `.env.example` a `.env` y ajusta valores locales.
 - Inicia el panel con el método elegido: manual o `systemd`.
 - Verifica acceso web, login básico, carga de logs y control de servicio.

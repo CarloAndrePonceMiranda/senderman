@@ -10,7 +10,7 @@ force_overwrite=false
 
 usage() {
   cat <<'EOF'
-Uso: bash install_secure.sh [--service] [--force]
+Uso: bash install.sh [--service] [--force]
 
   --service   Instala y habilita el servicio systemd
   --force     Sobrescribe .env si ya existe

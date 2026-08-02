@@ -10,7 +10,7 @@ Si solo quieres dejarlo funcionando en Ubuntu, usa la guía corta en [DEPLOY.md]
 Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
-2. Ejecuta `bash install_secure.sh --service` si quieres dejarlo como servicio, o `bash install_secure.sh` si prefieres arrancarlo manualmente.
+2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres arrancarlo manualmente.
 3. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta.
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
@@ -26,7 +26,8 @@ Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release
 - `.env` no se sube al repositorio.
 - `users.json` y `panel.log` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
-- `install_secure.sh` es el instalador recomendado para otros equipos.
+- `install.sh` es el instalador recomendado para otros equipos.
+- `is.sh` es un alias local para el mismo instalador.
 
 ## Qué incluye
 
@@ -46,7 +47,8 @@ ftp-admin/
 ├── .gitignore
 ├── README.md
 ├── DEPLOY.md
-├── install_secure.sh
+├── install.sh
+├── is.sh
 ├── setup_ubuntu.sh
 ├── RELEASE_CHECKLIST.md
 ├── static/
@@ -77,13 +79,13 @@ ftp-admin/
 Si quieres hacerlo en un solo paso, ejecuta:
 
 ```bash
-bash install_secure.sh --service
+bash install.sh --service
 ```
 
 Si prefieres instalar sin habilitar el servicio aún:
 
 ```bash
-bash install_secure.sh
+bash install.sh
 ```
 
 Si prefieres hacerlo manualmente:
