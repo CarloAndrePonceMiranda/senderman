@@ -14,6 +14,9 @@ venv/
 panel.log
 users.json
 
+# Local helpers de publicación/actualización
+/local-tools/
+
 # Editors and OS
 .vscode/
 .idea/

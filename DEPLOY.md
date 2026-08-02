@@ -32,7 +32,7 @@ Ajusta al menos `ADMIN_PASS`. Si cambias rutas o usuario, revisa también el arc
 Cuando publiques cambios nuevos en GitHub, ejecuta:
 
 ```bash
-bash ~/.local/share/senderman/update_ubuntu.sh
+bash local-tools/update_ubuntu.sh
 ```
 
 Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.
@@ -42,13 +42,13 @@ Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servi
 Antes de crear un tag o una GitHub Release, ejecuta:
 
 ```bash
-bash ~/.local/share/senderman/release_check.sh
+bash local-tools/release_check.sh
 ```
 
 Si quieres forzar una revisión con cambios locales sin commit, usa:
 
 ```bash
-bash ~/.local/share/senderman/release_check.sh --allow-dirty v1.1.1
+bash local-tools/release_check.sh --allow-dirty v1.1.1
 ```
 
 ## Arranque manual

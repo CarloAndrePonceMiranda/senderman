@@ -15,8 +15,8 @@ Resumen rápido:
 4. Arranca el panel con `sudo systemctl enable --now senderman-ftp-admin`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Si después publicas cambios, usa tu copia privada de `update_ubuntu.sh` desde `~/.local/share/senderman/` para traerlos y reinstalar dependencias.
-Antes de publicar una versión, ejecuta tu copia privada de `release_check.sh` desde `~/.local/share/senderman/` para validar que el árbol está listo.
+Si después publicas cambios, usa tu copia privada de `local-tools/update_ubuntu.sh` para traerlos y reinstalar dependencias.
+Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release_check.sh` para validar que el árbol está listo.
 
 ## Checklist de entrega
 
@@ -52,6 +52,7 @@ ftp-admin/
 │   │   └── app.css
 │   └── js/
 │       └── app.js
+├── local-tools/  (ignorado por Git)
 └── templates/
     └── index.html
 ```
@@ -204,12 +205,12 @@ Valores por defecto incluidos en `.env.example`.
 
 ## Scripts privados
 
-Los helpers de publicación y actualización viven fuera del repo, en `~/.local/share/senderman/`:
+Los helpers de publicación y actualización viven en `local-tools/`:
 
-- `update_ubuntu.sh`
-- `release_check.sh`
+- `local-tools/update_ubuntu.sh`
+- `local-tools/release_check.sh`
 
-No se versionan para que queden solo en tu máquina.
+No se versionan porque `local-tools/` está ignorado por Git.
 
 ---
 
