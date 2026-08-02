@@ -16,11 +16,11 @@ Resumen rápido:
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
 Si después publicas cambios, usa `bash tools/update_ubuntu.sh` para traerlos y reinstalar dependencias.
-Antes de publicar una versión, ejecuta `bash local-tools/release_check.sh` para validar que el árbol está listo.
+Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
 
 ## Checklist de entrega
 
-- Usa la guía de [release y pruebas](local-tools/RELEASE_CHECKLIST.md) antes de publicar una versión.
+- Usa la guía privada de release y pruebas antes de publicar una versión.
 - `master` es la rama principal.
 - Existe el commit inicial y la etiqueta `v1.0.0`.
 - `.env` no se sube al repositorio.
@@ -53,9 +53,6 @@ ftp-admin/
 │   │   └── app.css
 │   └── js/
 │       └── app.js
-├── local-tools/
-│   ├── RELEASE_CHECKLIST.md
-│   └── release_check.sh
 ├── tools/
 │   ├── is.sh
 │   ├── maintenance.sh
@@ -226,7 +223,6 @@ Los helpers de operación viven en `tools/`:
 - `tools/update_ubuntu.sh`
 - `tools/registry_db.sh`
 - `tools/maintenance.sh`
-- `local-tools/release_check.sh`
 - `tools/is.sh`
 - `tools/setup_ubuntu.sh`
 - `tools/update.sh`
