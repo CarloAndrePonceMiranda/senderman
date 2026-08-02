@@ -15,6 +15,8 @@ Resumen rápido:
 4. Arranca el panel con `sudo systemctl enable --now senderman-ftp-admin`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
+Si después publicas cambios, usa `bash update_ubuntu.sh` para traerlos y reinstalar dependencias.
+
 ## Checklist de entrega
 
 - `master` es la rama principal.

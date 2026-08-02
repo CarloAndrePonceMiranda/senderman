@@ -27,6 +27,16 @@ nano .env
 
 Ajusta al menos `ADMIN_PASS`. Si cambias rutas o usuario, revisa también el archivo `/etc/sudoers.d/ftp-admin`.
 
+## Actualización
+
+Cuando publiques cambios nuevos en GitHub, ejecuta:
+
+```bash
+bash update_ubuntu.sh
+```
+
+Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.
+
 ## Arranque manual
 
 ```bash
