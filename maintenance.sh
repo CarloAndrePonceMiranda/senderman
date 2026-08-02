@@ -11,7 +11,7 @@ Uso:
 
 Qué hace:
   1) Crea un respaldo de senderman_registry.sqlite3
-  2) Ejecuta update.sh
+  2) Ejecuta update_ubuntu.sh
   3) Si falla la actualización, muestra el comando de restauración
 EOF
 }
@@ -37,7 +37,7 @@ else
   echo "Aviso: no existe senderman_registry.sqlite3; se omite el respaldo del registro."
 fi
 
-if bash update.sh; then
+if bash update_ubuntu.sh; then
   echo
   echo "Mantenimiento completado con éxito."
 else

@@ -15,7 +15,7 @@ Resumen rápido:
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Si después publicas cambios, usa `./update.sh` para traerlos y reinstalar dependencias.
+Si después publicas cambios, usa `./update_ubuntu.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release_check.sh` para validar que el árbol está listo.
 
 ## Checklist de entrega
@@ -217,9 +217,11 @@ Valores por defecto incluidos en `.env.example`.
 
 Los helpers de operación para el usuario final viven en la raíz del repo:
 
-- `./update.sh`
+- `./update_ubuntu.sh`
 - `./registry_db.sh`
 - `./maintenance.sh`
+
+`./update.sh` sigue existiendo como alias hacia `./update_ubuntu.sh`.
 
 El helper privado de publicación sigue en `local-tools/`:
 

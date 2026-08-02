@@ -36,7 +36,7 @@ El registro de usuarios se guarda en `senderman_registry.sqlite3`; si vienes de 
 Cuando publiques cambios nuevos en GitHub, ejecuta:
 
 ```bash
-bash ./update.sh
+bash ./update_ubuntu.sh
 ```
 
 Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.
@@ -54,7 +54,7 @@ Ese helper crea un respaldo del registro SQLite antes de actualizar y te deja un
 Antes de crear un tag o una GitHub Release, ejecuta:
 
 ```bash
-bash local-tools/release_check.sh
+bash ./update_ubuntu.sh
 ```
 
 Si quieres forzar una revisión con cambios locales sin commit, usa:
