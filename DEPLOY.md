@@ -55,6 +55,16 @@ Si quieres forzar una revisión con cambios locales sin commit, usa:
 bash local-tools/release_check.sh --allow-dirty v1.1.1
 ```
 
+## Respaldo del registro
+
+Si necesitas guardar o restaurar el estado de usuarios, usa:
+
+```bash
+bash local-tools/registry_db.sh backup
+bash local-tools/registry_db.sh restore local-tools/backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
+bash local-tools/registry_db.sh status
+```
+
 ## Arranque manual
 
 ```bash
