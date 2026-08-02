@@ -16,9 +16,11 @@ Resumen rápido:
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
 Si después publicas cambios, usa `bash update_ubuntu.sh` para traerlos y reinstalar dependencias.
+Antes de publicar una versión, ejecuta `bash release_check.sh` para validar que el árbol está listo.
 
 ## Checklist de entrega
 
+- Usa la guía de [release y pruebas](RELEASE_CHECKLIST.md) antes de publicar una versión.
 - `master` es la rama principal.
 - Existe el commit inicial y la etiqueta `v1.0.0`.
 - `.env` no se sube al repositorio.
@@ -43,8 +45,10 @@ ftp-admin/
 ├── .gitignore
 ├── README.md
 ├── DEPLOY.md
+├── RELEASE_CHECKLIST.md
 ├── setup_ubuntu.sh
 ├── update_ubuntu.sh
+├── release_check.sh
 ├── static/
 │   ├── css/
 │   │   └── app.css
