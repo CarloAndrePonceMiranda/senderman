@@ -24,7 +24,7 @@ Antes de publicar una versión, ejecuta tu copia privada de `local-tools/release
 - `master` es la rama principal.
 - Existe el commit inicial y la etiqueta `v1.0.0`.
 - `.env` no se sube al repositorio.
-- `users.json` y `panel.log` siguen fuera de Git.
+- `senderman_registry.sqlite3`, `users.json` heredado y `panel.log` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
 - `is.sh` es un alias local para el mismo instalador.
@@ -162,7 +162,7 @@ pkill -f "python3 main.py"
 - La pestaña **Usuarios conectados** contiene el registro de usuarios.
 - El botón **Abrir registro de usuarios** abre una modal para crear cuentas.
 - Los toggles de **Estado** y **Escritura** se usan directamente desde la tabla.
-- El panel guarda el registro local en `users.json`.
+- El panel guarda el registro local en `senderman_registry.sqlite3` y migra desde `users.json` si viene de una versión anterior.
 
 ---
 
@@ -294,15 +294,15 @@ Si cambias la ruta del repositorio, edita `WorkingDirectory` y `ExecStart` en el
 - **Chroot jail**: el usuario FTP solo ve `senderman/` y no puede salir
 - **Sin shell**: `jesus12jimmy13` usa `/usr/sbin/nologin` — no puede abrir una terminal
 - **Certificado TLS**: autofirmado en `/etc/ssl/vsftpd/`, válido 1 año
-- **Registro local**: el panel guarda estado de bloqueo y escritura por usuario en `users.json`
-- `.env`, `panel.log`, `users.json` y `__pycache__/` no se suben al repositorio.
+- **Registro local**: el panel guarda estado de bloqueo y escritura por usuario en `senderman_registry.sqlite3`
+- `.env`, `panel.log`, `users.json`, `senderman_registry.sqlite3` y `__pycache__/` no se suben al repositorio.
 
 ## Cómo registrar usuarios
 
 1. Abre el panel y ve a la tarjeta **Registro de usuarios**.
 2. Escribe el nombre de usuario y una contraseña inicial.
 3. Pulsa **Crear**.
-4. El panel crea la cuenta del sistema con shell deshabilitada y la añade a `users.json`.
+4. El panel crea la cuenta del sistema con shell deshabilitada y la añade al registro SQLite.
 5. Después ya podrás bloquearla o darle escritura desde la tabla.
 
 > La cuenta se crea con `/usr/sbin/nologin` para mantener el acceso restringido.
@@ -312,7 +312,7 @@ Si cambias la ruta del repositorio, edita `WorkingDirectory` y `ExecStart` en el
 ## Para compartir el proyecto en GitHub
 
 1. Verifica que `.env` no tenga secretos que no quieras compartir.
-2. Confirma que `users.json` y `panel.log` no se suban.
+2. Confirma que `senderman_registry.sqlite3`, `users.json` y `panel.log` no se suban.
 3. Mantén el repositorio privado si contiene configuración sensible.
 4. Si tu compa va a desplegarlo, solo necesita clonar, crear `.env`, instalar dependencias y arrancar `main.py`.
 

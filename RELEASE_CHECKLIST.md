@@ -10,7 +10,7 @@ Usa esta lista antes de publicar una nueva versión en un repo privado de produc
 - Revisa que el cambio corresponda a un feature, bugfix o hotfix correcto.
 - Valida que `main.py`, `templates/index.html` y `static/js/app.js` no tengan errores.
 - Comprueba que `.env` no contiene secretos que no deban salir de la máquina.
-- Asegúrate de que `users.json`, `panel.log` y otros archivos runtime siguen ignorados.
+- Asegúrate de que `senderman_registry.sqlite3`, `users.json`, `panel.log` y otros archivos runtime siguen ignorados.
 
 ## Crear la release
 

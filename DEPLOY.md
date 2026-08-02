@@ -29,6 +29,8 @@ bash install.sh
 `install.sh` crea `.env` con permisos 600 si no existe y te pide revisar `ADMIN_PASS` antes de continuar.
 Si cambias rutas o usuario, revisa también el archivo `/etc/sudoers.d/ftp-admin`.
 
+El registro de usuarios se guarda en `senderman_registry.sqlite3`; si vienes de una versión anterior, el instalador migra `users.json` automáticamente al arrancar el panel.
+
 ## Actualización
 
 Cuando publiques cambios nuevos en GitHub, ejecuta:

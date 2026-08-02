@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import subprocess
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -38,7 +39,8 @@ FTP_LOG    = os.getenv("FTP_LOG", "/var/log/vsftpd.log")
 VSFTPD_CONF = os.getenv("VSFTPD_CONF", "/etc/vsftpd.conf")
 FILES_DIR  = os.getenv("FILES_DIR", "/home/mr-robot/senderman/files")
 FTP_USER   = os.getenv("FTP_USER", "jesus12jimmy13")   # Usuario FTP principal
-USER_REGISTRY_FILE = Path(__file__).parent / "users.json"
+USER_REGISTRY_DB = Path(__file__).parent / "senderman_registry.sqlite3"
+LEGACY_USER_REGISTRY_FILE = Path(__file__).parent / "users.json"
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Senderman FTP Admin")
@@ -93,14 +95,25 @@ def _default_user_record(username: str) -> dict:
     }
 
 
-def _save_user_registry(users: list[dict]) -> None:
-    USER_REGISTRY_FILE.write_text(json.dumps(users, indent=2, ensure_ascii=False))
+def _open_registry_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(USER_REGISTRY_DB)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def get_user_registry() -> list[dict]:
+def _row_to_user(row: sqlite3.Row) -> dict:
+    return {
+        "username": row["username"],
+        "locked": bool(row["locked"]),
+        "write_enabled": bool(row["write_enabled"]),
+        "protocol": row["protocol"],
+    }
+
+
+def _legacy_user_registry_records() -> list[dict]:
     try:
-        if USER_REGISTRY_FILE.exists():
-            raw = json.loads(USER_REGISTRY_FILE.read_text())
+        if LEGACY_USER_REGISTRY_FILE.exists():
+            raw = json.loads(LEGACY_USER_REGISTRY_FILE.read_text())
             users = raw if isinstance(raw, list) else []
         else:
             users = []
@@ -122,14 +135,91 @@ def get_user_registry() -> list[dict]:
             "write_enabled": bool(item.get("write_enabled", get_write_enabled() if username == FTP_USER else False)),
             "protocol": item.get("protocol", "SFTP"),
         })
-
-    if FTP_USER not in seen:
-        normalized.insert(0, _default_user_record(FTP_USER))
-        _save_user_registry(normalized)
-    elif normalized != users:
-        _save_user_registry(normalized)
-
     return normalized
+
+
+def _ensure_registry_db(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_registry (
+            username TEXT PRIMARY KEY,
+            locked INTEGER NOT NULL,
+            write_enabled INTEGER NOT NULL,
+            protocol TEXT NOT NULL
+        )
+        """
+    )
+    count = conn.execute("SELECT COUNT(*) FROM user_registry").fetchone()[0]
+    if count == 0:
+        for record in _legacy_user_registry_records():
+            conn.execute(
+                """
+                INSERT INTO user_registry (username, locked, write_enabled, protocol)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET
+                    locked = excluded.locked,
+                    write_enabled = excluded.write_enabled,
+                    protocol = excluded.protocol
+                """,
+                (
+                    record["username"],
+                    int(bool(record["locked"])),
+                    int(bool(record["write_enabled"])),
+                    record["protocol"],
+                ),
+            )
+    ftp_exists = conn.execute(
+        "SELECT 1 FROM user_registry WHERE username = ?",
+        (FTP_USER,),
+    ).fetchone()
+    if ftp_exists is None:
+        default_record = _default_user_record(FTP_USER)
+        conn.execute(
+            """
+            INSERT INTO user_registry (username, locked, write_enabled, protocol)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                default_record["username"],
+                int(bool(default_record["locked"])),
+                int(bool(default_record["write_enabled"])),
+                default_record["protocol"],
+            ),
+        )
+    conn.commit()
+
+
+def _upsert_user_record(conn: sqlite3.Connection, user: dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO user_registry (username, locked, write_enabled, protocol)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+            locked = excluded.locked,
+            write_enabled = excluded.write_enabled,
+            protocol = excluded.protocol
+        """,
+        (
+            user["username"],
+            int(bool(user["locked"])),
+            int(bool(user["write_enabled"])),
+            user.get("protocol", "SFTP"),
+        ),
+    )
+
+
+def get_user_registry() -> list[dict]:
+    with _open_registry_db() as conn:
+        _ensure_registry_db(conn)
+        rows = conn.execute(
+            """
+            SELECT username, locked, write_enabled, protocol
+            FROM user_registry
+            ORDER BY CASE WHEN username = ? THEN 0 ELSE 1 END, username
+            """,
+            (FTP_USER,),
+        ).fetchall()
+    return [_row_to_user(row) for row in rows]
 
 
 def _user_exists(username: str) -> bool:
@@ -138,18 +228,17 @@ def _user_exists(username: str) -> bool:
 
 
 def _update_user_registry(username: str, updater) -> list[dict]:
-    users = get_user_registry()
-    updated: list[dict] = []
-    found = False
-    for item in users:
-        if item["username"] == username:
-            item = updater(item)
-            found = True
-        updated.append(item)
-    if not found:
-        updated.append(updater(_default_user_record(username)))
-    _save_user_registry(updated)
-    return updated
+    with _open_registry_db() as conn:
+        _ensure_registry_db(conn)
+        row = conn.execute(
+            "SELECT username, locked, write_enabled, protocol FROM user_registry WHERE username = ?",
+            (username,),
+        ).fetchone()
+        current = _row_to_user(row) if row is not None else _default_user_record(username)
+        updated = updater(current)
+        _upsert_user_record(conn, updated)
+        conn.commit()
+    return get_user_registry()
 
 
 def _active_peer_ips(port: int) -> set[str]:
