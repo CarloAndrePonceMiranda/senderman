@@ -44,6 +44,40 @@ prompt_confirm() {
   [[ "$reply" =~ ^[Yy]$ ]]
 }
 
+generate_password() {
+  python3 - <<'PY'
+import secrets
+print(secrets.token_urlsafe(18))
+PY
+}
+
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  python3 - "$key" "$value" <<'PY'
+from pathlib import Path
+import sys
+
+key = sys.argv[1]
+value = sys.argv[2]
+path = Path('.env')
+lines = []
+replaced = False
+
+for line in path.read_text().splitlines():
+    if line.startswith(f'{key}='):
+        lines.append(f'{key}={value}')
+        replaced = True
+    else:
+        lines.append(line)
+
+if not replaced:
+    lines.append(f'{key}={value}')
+
+path.write_text('\n'.join(lines) + '\n')
+PY
+}
+
 echo "== Senderman FTP Admin secure install =="
 echo "Repo: $repo_root"
 
@@ -81,9 +115,20 @@ else
   echo "Se creó .env desde .env.example con permisos 600."
 fi
 
+current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
+if [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
+  echo
+  read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
+  if [ -z "$admin_pass" ]; then
+    admin_pass="$(generate_password)"
+    echo "ADMIN_PASS generado automáticamente."
+    echo "Guárdalo ahora: $admin_pass"
+  fi
+  set_env_value "ADMIN_PASS" "$admin_pass"
+fi
+
 echo
-echo "Abre .env y ajusta al menos ADMIN_PASS antes de continuar."
-echo "También revisa FTP_LOG, VSFTPD_CONF y FILES_DIR si tu equipo usa rutas distintas."
+echo "Revisa .env si quieres ajustar ADMIN_USER, FTP_LOG, VSFTPD_CONF o FILES_DIR."
 prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?" || true
 
 if $install_service; then

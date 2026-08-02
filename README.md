@@ -11,7 +11,7 @@ Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
 2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres arrancarlo manualmente.
-3. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta.
+3. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 

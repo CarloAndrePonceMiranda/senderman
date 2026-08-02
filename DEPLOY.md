@@ -26,7 +26,7 @@ bash install.sh
 
 ## Configuración
 
-`install.sh` crea `.env` con permisos 600 y te pide revisar `ADMIN_PASS` antes de continuar.
+`install.sh` crea `.env` con permisos 600 si no existe y te pide revisar `ADMIN_PASS` antes de continuar.
 Si cambias rutas o usuario, revisa también el archivo `/etc/sudoers.d/ftp-admin`.
 
 ## Actualización
