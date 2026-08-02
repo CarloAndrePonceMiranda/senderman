@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 
@@ -43,6 +44,9 @@ USER_REGISTRY_FILE = Path(__file__).parent / "users.json"
 app = FastAPI(title="Senderman FTP Admin")
 security = HTTPBasic()
 HTML_FILE = Path(__file__).parent / "templates" / "index.html"
+STATIC_DIR = Path(__file__).parent / "static"
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ── Utilidades ─────────────────────────────────────────────────────────────────
 def verify(credentials: HTTPBasicCredentials = Depends(security)) -> str:

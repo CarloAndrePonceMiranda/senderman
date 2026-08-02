@@ -42,6 +42,14 @@ ftp-admin/
 ├── .env.example
 ├── .gitignore
 ├── README.md
+├── DEPLOY.md
+├── setup_ubuntu.sh
+├── update_ubuntu.sh
+├── static/
+│   ├── css/
+│   │   └── app.css
+│   └── js/
+│       └── app.js
 └── templates/
     └── index.html
 ```
