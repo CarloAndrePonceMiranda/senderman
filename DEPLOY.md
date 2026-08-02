@@ -60,7 +60,7 @@ bash local-tools/release_check.sh
 Si quieres forzar una revisión con cambios locales sin commit, usa:
 
 ```bash
-bash local-tools/release_check.sh --allow-dirty v1.1.1
+bash local-tools/release_check.sh --allow-dirty v1.3.0
 ```
 
 ## Respaldo del registro
