@@ -406,7 +406,11 @@ with tempfile.TemporaryDirectory() as temp_dir:
     with urllib.request.urlopen(request) as response, open(archive_path, "wb") as archive_file:
       shutil.copyfileobj(response, archive_file)
   except Exception:
-    match = re.search(r"/tags/([^/]+)\.tar\.gz$", tarball_url)
+    match = (
+      re.search(r"/tarball/([^/?#]+)$", tarball_url)
+      or re.search(r"/archive/refs/tags/([^/]+)\.tar\.gz$", tarball_url)
+      or re.search(r"/tags/([^/]+)\.tar\.gz$", tarball_url)
+    )
     if not match:
       raise
 

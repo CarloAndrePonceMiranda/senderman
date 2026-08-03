@@ -444,9 +444,11 @@ sync_release_tree() {
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
+import re
 import urllib.request
 from pathlib import Path
 
@@ -457,21 +459,32 @@ keep = {".git", ".venv", ".env", "panel.log", "users.json", "senderman_registry.
 with tempfile.TemporaryDirectory() as temp_dir:
 		temp_path = Path(temp_dir)
 		archive_path = temp_path / "release.tar.gz"
-		request = urllib.request.Request(tarball_url, headers={"User-Agent": "senderman-installer"})
-		with urllib.request.urlopen(request) as response, open(archive_path, "wb") as archive_file:
+		try:
+			request = urllib.request.Request(tarball_url, headers={"User-Agent": "senderman-installer"})
+			with urllib.request.urlopen(request) as response, open(archive_path, "wb") as archive_file:
 				shutil.copyfileobj(response, archive_file)
+		except Exception:
+			match = (
+				re.search(r"/tarball/([^/?#]+)$", tarball_url)
+				or re.search(r"/archive/refs/tags/([^/]+)\.tar\.gz$", tarball_url)
+				or re.search(r"/tags/([^/]+)\.tar\.gz$", tarball_url)
+			)
+			if not match:
+				raise
+
+			tag = match.group(1)
+			subprocess.run(["git", "archive", "--format=tar.gz", f"--output={archive_path}", tag], check=True, cwd=repo_root)
 
 		with tarfile.open(archive_path, "r:gz") as archive:
 				archive.extractall(temp_path)
 
 		extracted_roots = [entry for entry in temp_path.iterdir() if entry.name != archive_path.name]
-		if len(extracted_roots) != 1 or not extracted_roots[0].is_dir():
-				raise SystemExit("error: no se pudo identificar el contenido de la release descargada")
-
-		source_root = extracted_roots[0]
+		source_root = extracted_roots[0] if len(extracted_roots) == 1 and extracted_roots[0].is_dir() else temp_path
 
 		for path in source_root.rglob("*"):
 				relative_path = path.relative_to(source_root)
+				if path == archive_path:
+					continue
 				if relative_path.parts and relative_path.parts[0] in keep:
 						continue
 
