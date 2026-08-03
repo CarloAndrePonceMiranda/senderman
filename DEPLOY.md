@@ -36,7 +36,7 @@ El registro de usuarios se guarda en `senderman_registry.sqlite3`; si vienes de 
 Cuando publiques cambios nuevos en GitHub, ejecuta:
 
 ```bash
-bash tools/update_ubuntu.sh
+bash tools/update.sh
 ```
 
 Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.

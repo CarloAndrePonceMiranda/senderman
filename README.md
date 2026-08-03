@@ -15,7 +15,7 @@ Resumen rápido:
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Si después publicas cambios, usa `bash tools/update_ubuntu.sh` para traerlos y reinstalar dependencias.
+Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
 
 ## Checklist de entrega
@@ -220,12 +220,12 @@ Valores por defecto incluidos en `.env.example`.
 
 Los helpers de operación viven en `tools/`:
 
-- `tools/update_ubuntu.sh`
 - `tools/registry_db.sh`
 - `tools/maintenance.sh`
 - `tools/is.sh`
 - `tools/setup_ubuntu.sh`
 - `tools/update.sh`
+- `tools/update_ubuntu.sh` como compatibilidad
 
 Los archivos de respaldo se guardan en `backups/`, que está ignorado por Git.
 
