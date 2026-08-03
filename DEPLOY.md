@@ -18,6 +18,8 @@ cd ftp-admin
 bash install.sh --service
 ```
 
+`install.sh` instala por defecto la release publicada más reciente. Si necesitas otra versión publicada, usa `bash install.sh --release <release-publicada>` o `bash install.sh --choose-release`.
+
 Si prefieres instalar sin habilitar el servicio aún:
 
 ```bash
@@ -53,15 +55,9 @@ Ese helper crea un respaldo del registro SQLite antes de actualizar y te deja un
 
 Antes de crear un tag o una GitHub Release, ejecuta:
 
-```bash
-bash local-tools/release_check.sh
-```
+tu comprobación privada de release.
 
-Si quieres forzar una revisión con cambios locales sin commit, usa:
-
-```bash
-bash local-tools/release_check.sh --allow-dirty
-```
+Si quieres forzar una revisión con cambios locales sin commit, usa la opción equivalente de tu comprobación privada.
 
 ## Respaldo del registro
 

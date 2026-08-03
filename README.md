@@ -10,7 +10,7 @@ Si solo quieres dejarlo funcionando en Ubuntu, usa la guía corta en [DEPLOY.md]
 Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
-2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres arrancarlo manualmente.
+2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres arrancarlo manualmente. Por defecto instala la release publicada más reciente; si quieres otra, usa `--release <release-publicada>` o `--choose-release`.
 3. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
 4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 5. Abre `http://localhost:8080` y verifica el estado del servicio.
@@ -89,6 +89,13 @@ Si prefieres instalar sin habilitar el servicio aún:
 
 ```bash
 bash install.sh
+```
+
+Para una release concreta o para elegir entre releases publicadas:
+
+```bash
+bash install.sh --release <release-publicada>
+bash install.sh --choose-release
 ```
 
 Si prefieres hacerlo manualmente:
