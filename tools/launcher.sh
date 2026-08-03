@@ -16,6 +16,27 @@ start_service() {
   fi
 }
 
+stop_service() {
+  if ! systemctl is-active --quiet "$service_name"; then
+    return 0
+  fi
+
+  if command -v pkexec >/dev/null 2>&1; then
+    pkexec /usr/bin/systemctl stop "$service_name"
+  else
+    sudo /usr/bin/systemctl stop "$service_name"
+  fi
+}
+
+shutdown_machine() {
+  if command -v pkexec >/dev/null 2>&1; then
+    pkexec /usr/bin/bash -lc "/usr/bin/systemctl stop senderman-ftp-admin && /usr/bin/systemctl poweroff"
+  else
+    sudo /usr/bin/systemctl stop "$service_name"
+    sudo /usr/bin/systemctl poweroff
+  fi
+}
+
 open_panel() {
   if command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$panel_url" >/dev/null 2>&1 || true
@@ -28,11 +49,7 @@ case "${1:-start}" in
     open_panel
     ;;
   stop)
-    if command -v pkexec >/dev/null 2>&1; then
-      pkexec /usr/bin/systemctl stop "$service_name"
-    else
-      sudo /usr/bin/systemctl stop "$service_name"
-    fi
+    stop_service
     ;;
   restart)
     if command -v pkexec >/dev/null 2>&1; then
@@ -44,8 +61,11 @@ case "${1:-start}" in
   status)
     systemctl status "$service_name" --no-pager
     ;;
+  shutdown)
+    shutdown_machine
+    ;;
   *)
-    echo "Uso: $0 [start|stop|restart|status]" >&2
+    echo "Uso: $0 [start|stop|restart|status|shutdown]" >&2
     exit 1
     ;;
 esac

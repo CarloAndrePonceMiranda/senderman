@@ -1,0 +1,13 @@
+[Unit]
+Description=Stop vsftpd before shutdown
+DefaultDependencies=no
+Before=shutdown.target reboot.target halt.target poweroff.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/true
+ExecStop=/usr/bin/systemctl stop vsftpd
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -98,6 +98,18 @@ sudo systemctl restart senderman-ftp-admin
 sudo systemctl stop senderman-ftp-admin
 ```
 
+### Detener vsftpd antes de apagar Ubuntu
+
+Si quieres que `vsftpd` se detenga automáticamente al apagar este equipo, instala el servicio [vsftpd-stop-on-shutdown.service](vsftpd-stop-on-shutdown.service):
+
+```bash
+sudo cp vsftpd-stop-on-shutdown.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable vsftpd-stop-on-shutdown
+```
+
+Con ese servicio habilitado, `vsftpd` se detendrá como parte del apagado normal de Ubuntu.
+
 ## Arranque bajo demanda con autenticación
 
 Si quieres que el panel se inicie solo cuando lo pidas y que Ubuntu te solicite la contraseña del sistema, usa el launcher local:
