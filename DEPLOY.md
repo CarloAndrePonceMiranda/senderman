@@ -41,7 +41,7 @@ Cuando publiques cambios nuevos en GitHub, ejecuta:
 bash tools/update.sh
 ```
 
-Ese script hace `git pull --ff-only`, reinstala dependencias y reinicia el servicio systemd si está disponible.
+Ese script instala la release publicada más reciente, o la release publicada que elijas, reinstala dependencias y reinicia el servicio systemd si está disponible.
 
 Si quieres una actualización más segura, usa:
 

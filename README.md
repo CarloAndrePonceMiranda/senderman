@@ -28,6 +28,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
 - `tools/is.sh` es un alias local para el mismo instalador.
+- `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
 
 ## Qué incluye
 

@@ -15,6 +15,7 @@ panel.log
 users.json
 senderman_registry.sqlite3
 backups/
+.senderman-release
 local-tools/
 
 # Editors and OS
