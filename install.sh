@@ -9,16 +9,21 @@ install_service=false
 force_overwrite=false
 release_mode="latest"
 release_selector=""
+install_profile=""
+client_config_file="client.env"
 
 usage() {
   cat <<'EOF'
-Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release]
+Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--client|--both]
 
   --service         Instala y habilita el servicio systemd
   --force           Sobrescribe .env si ya existe
   --latest-release  Instala la release publicada más reciente (por defecto)
   --release <release> Instala una release publicada concreta
   --choose-release  Muestra una lista de releases publicadas y deja elegir una
+  --server          Instala el panel/servidor FTP
+  --client          Instala herramientas seguras de cliente
+  --both            Instala servidor y cliente
 EOF
 }
 
@@ -55,6 +60,18 @@ while [[ $# -gt 0 ]]; do
     --choose-release)
       release_mode="choose"
       release_selector=""
+      shift
+      ;;
+    --server|--servidor)
+      install_profile="server"
+      shift
+      ;;
+    --client|--cliente)
+      install_profile="client"
+      shift
+      ;;
+    --both|--ambos)
+      install_profile="both"
       shift
       ;;
     -h|--help)
@@ -108,6 +125,148 @@ if not replaced:
 
 path.write_text('\n'.join(lines) + '\n')
 PY
+}
+
+normalize_profile() {
+  case "${1:-}" in
+    server|servidor)
+      echo "server"
+      ;;
+    client|cliente)
+      echo "client"
+      ;;
+    both|ambos)
+      echo "both"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+prompt_install_profile() {
+  local reply
+
+  if [ -n "$install_profile" ]; then
+    install_profile="$(normalize_profile "$install_profile")"
+    if [ -z "$install_profile" ]; then
+      echo "error: modo de instalación inválido"
+      exit 1
+    fi
+    return
+  fi
+
+  if [ ! -t 0 ]; then
+    install_profile="server"
+    return
+  fi
+
+  echo
+  read -r -p "¿Qué deseas instalar? [servidor/cliente/ambos] (servidor): " reply
+  install_profile="$(normalize_profile "${reply:-server}")"
+  if [ -z "$install_profile" ]; then
+    echo "error: modo de instalación inválido"
+    exit 1
+  fi
+}
+
+install_client_tools() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "aviso: no hay sudo disponible; instala manualmente lftp, openssh-client y ca-certificates"
+    return 0
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "aviso: apt-get no está disponible; instala manualmente lftp, openssh-client y ca-certificates"
+    return 0
+  fi
+
+  echo "Instalando herramientas de cliente seguro..."
+  sudo apt-get update
+  sudo apt-get install -y lftp openssh-client ca-certificates
+}
+
+write_client_config() {
+  if [ -f "$client_config_file" ] && ! $force_overwrite; then
+    echo "$client_config_file ya existe; no se sobrescribió."
+    return 0
+  fi
+
+  cat > "$client_config_file" <<'EOF'
+# Cliente seguro Senderman
+SENDERMAN_CLIENT_PROTOCOL=ftps
+SENDERMAN_CLIENT_HOST=
+SENDERMAN_CLIENT_PORT=21
+SENDERMAN_CLIENT_USER=
+
+# Opcionales:
+# SENDERMAN_CLIENT_VERIFY=yes
+# SENDERMAN_CLIENT_CA_FILE=/ruta/a/ca.crt
+EOF
+  chmod 600 "$client_config_file"
+  echo "Se creó $client_config_file con permisos 600."
+}
+
+prompt_client_profile() {
+  local host
+  local port
+  local user
+  local protocol
+  local verify
+  local ca_file
+
+  if [ ! -t 0 ]; then
+    return 0
+  fi
+
+  echo
+  read -r -p "Modo de cliente [ftps/sftp] (ftps): " protocol
+  protocol="${protocol:-ftps}"
+
+  read -r -p "Servidor o IP remoto: " host
+  read -r -p "Puerto remoto (21 para FTPS, 2222 para SFTP): " port
+  read -r -p "Usuario remoto: " user
+
+  if [ -z "$host" ] || [ -z "$user" ]; then
+    echo "aviso: faltan datos de cliente; deja $client_config_file para configurarlo después"
+    return 0
+  fi
+
+  if [ "$protocol" = "sftp" ]; then
+    port="${port:-2222}"
+  else
+    port="${port:-21}"
+  fi
+
+  if [ "$protocol" = "ftps" ]; then
+    read -r -p "¿Verificar certificado TLS? [Y/n]: " verify
+    verify="${verify:-yes}"
+    if [[ "$verify" =~ ^[Nn]$ ]]; then
+      verify="no"
+    else
+      verify="yes"
+    fi
+
+    ca_file=""
+    if [ "$verify" = "yes" ]; then
+      read -r -p "Ruta opcional de la CA (.crt) para confiar en el servidor: " ca_file
+    fi
+  fi
+
+  {
+    echo "SENDERMAN_CLIENT_PROTOCOL=$protocol"
+    echo "SENDERMAN_CLIENT_HOST=$host"
+    echo "SENDERMAN_CLIENT_PORT=$port"
+    echo "SENDERMAN_CLIENT_USER=$user"
+    if [ "$protocol" = "ftps" ]; then
+      echo "SENDERMAN_CLIENT_VERIFY=$verify"
+      if [ -n "$ca_file" ]; then
+        echo "SENDERMAN_CLIENT_CA_FILE=$ca_file"
+      fi
+    fi
+  } > "$client_config_file"
+  chmod 600 "$client_config_file"
+  echo "Se guardó la configuración de cliente en $client_config_file."
 }
 
 get_repo_slug() {
@@ -395,7 +554,7 @@ from pathlib import Path
 
 tarball_url = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
-keep = {".git", ".venv", ".env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
+keep = {".git", ".venv", ".env", "client.env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
 
 with tempfile.TemporaryDirectory() as temp_dir:
   temp_path = Path(temp_dir)
@@ -466,14 +625,18 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! python3 -c 'import venv' >/dev/null 2>&1; then
-  echo "error: python3-venv no está instalado"
-  exit 1
-fi
+prompt_install_profile
 
-if ! command -v pip3 >/dev/null 2>&1; then
-  echo "error: pip3 no está instalado"
-  exit 1
+if [ "$install_profile" != "client" ]; then
+  if ! python3 -c 'import venv' >/dev/null 2>&1; then
+    echo "error: python3-venv no está instalado"
+    exit 1
+  fi
+
+  if ! command -v pip3 >/dev/null 2>&1; then
+    echo "error: pip3 no está instalado"
+    exit 1
+  fi
 fi
 
 if [ "${SENDERMAN_INSTALLER_SKIP_BOOTSTRAP:-0}" != "1" ]; then
@@ -492,65 +655,91 @@ if [ "${SENDERMAN_INSTALLER_SKIP_BOOTSTRAP:-0}" != "1" ]; then
   exec env SENDERMAN_INSTALLER_SKIP_BOOTSTRAP=1 bash "$repo_root/install.sh" "$@"
 fi
 
-if [ ! -d .venv ]; then
-  echo "Creando entorno virtual..."
-  python3 -m venv .venv
-fi
+if [ "$install_profile" != "client" ]; then
+  if [ ! -d .venv ]; then
+    echo "Creando entorno virtual..."
+    python3 -m venv .venv
+  fi
 
-# shellcheck disable=SC1091
-source .venv/bin/activate
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
 
-pip install --upgrade pip >/dev/null
-pip install -r requirements.txt
+  pip install --upgrade pip >/dev/null
+  pip install -r requirements.txt
 
-if [ -f .env ] && ! $force_overwrite; then
-  echo ".env ya existe; no se sobrescribió."
-else
-  cp .env.example .env
-  chmod 600 .env
-  echo "Se creó .env desde .env.example con permisos 600."
-fi
+  if [ -f .env ] && ! $force_overwrite; then
+    echo ".env ya existe; no se sobrescribió."
+  else
+    cp .env.example .env
+    chmod 600 .env
+    echo "Se creó .env desde .env.example con permisos 600."
+  fi
 
-current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
-if [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
+  current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
+  if [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
+    echo
+    read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
+    if [ -z "$admin_pass" ]; then
+      admin_pass="$(generate_password)"
+      echo "ADMIN_PASS generado automáticamente."
+      echo "Guárdalo ahora: $admin_pass"
+    fi
+    set_env_value "ADMIN_PASS" "$admin_pass"
+  fi
+
   echo
-  read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
-  if [ -z "$admin_pass" ]; then
-    admin_pass="$(generate_password)"
-    echo "ADMIN_PASS generado automáticamente."
-    echo "Guárdalo ahora: $admin_pass"
+  echo "Revisa .env si quieres ajustar ADMIN_USER, FTP_LOG, VSFTPD_CONF o FILES_DIR."
+  prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?" || true
+
+  if [ "$install_profile" != "client" ] && $install_service; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      echo "error: sudo no está disponible y se pidió instalar el servicio"
+      exit 1
+    fi
+
+    if [ ! -f senderman-ftp-admin.service ]; then
+      echo "error: no se encontró senderman-ftp-admin.service"
+      exit 1
+    fi
+
+    echo "Instalando servicio systemd..."
+    sudo cp senderman-ftp-admin.service "/etc/systemd/system/$service_name.service"
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now "$service_name"
   fi
-  set_env_value "ADMIN_PASS" "$admin_pass"
 fi
 
-echo
-echo "Revisa .env si quieres ajustar ADMIN_USER, FTP_LOG, VSFTPD_CONF o FILES_DIR."
-prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?" || true
-
-if $install_service; then
-  if ! command -v sudo >/dev/null 2>&1; then
-    echo "error: sudo no está disponible y se pidió instalar el servicio"
-    exit 1
-  fi
-
-  if [ ! -f senderman-ftp-admin.service ]; then
-    echo "error: no se encontró senderman-ftp-admin.service"
-    exit 1
-  fi
-
-  echo "Instalando servicio systemd..."
-  sudo cp senderman-ftp-admin.service "/etc/systemd/system/$service_name.service"
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now "$service_name"
+if [ "$install_profile" != "server" ]; then
+  install_client_tools
+  write_client_config
+  prompt_client_profile
 fi
 
 echo
 echo "Listo. Siguientes pasos:"
-echo "1) Verifica .env"
-if $install_service; then
-  echo "2) Revisa el estado con: sudo systemctl status $service_name"
-  echo "3) Abre http://localhost:8080"
-else
-  echo "2) Arranca el panel con: nohup .venv/bin/python main.py > panel.log 2>&1 &"
-  echo "3) Abre http://localhost:8080"
-fi
+case "$install_profile" in
+  server)
+    echo "1) Verifica .env"
+    if $install_service; then
+      echo "2) Revisa el estado con: sudo systemctl status $service_name"
+      echo "3) Abre http://localhost:8080"
+    else
+      echo "2) Arranca el panel con: nohup .venv/bin/python main.py > panel.log 2>&1 &"
+      echo "3) Abre http://localhost:8080"
+    fi
+    ;;
+  client)
+    echo "1) Ajusta client.env con la IP o dominio remoto"
+    echo "2) Usa: bash tools/client.sh connect"
+    echo "3) Si es FTPS, instala la CA del servidor para evitar el error de certificado"
+    ;;
+  both)
+    echo "1) Verifica .env y client.env"
+    if $install_service; then
+      echo "2) Revisa el estado con: sudo systemctl status $service_name"
+    else
+      echo "2) Arranca el panel con: nohup .venv/bin/python main.py > panel.log 2>&1 &"
+    fi
+    echo "3) Usa: bash tools/client.sh connect"
+    ;;
+esac

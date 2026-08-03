@@ -454,7 +454,7 @@ from pathlib import Path
 
 tarball_url = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
-keep = {".git", ".venv", ".env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
+keep = {".git", ".venv", ".env", "client.env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
 
 with tempfile.TemporaryDirectory() as temp_dir:
 		temp_path = Path(temp_dir)

@@ -11,9 +11,10 @@ Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
 2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres arrancarlo manualmente. Por defecto instala la release publicada más reciente; si quieres otra, usa `--release <release-publicada>` o `--choose-release`.
-3. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
-4. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
-5. Abre `http://localhost:8080` y verifica el estado del servicio.
+3. Durante la instalación puedes elegir `servidor`, `cliente` o `ambos`. El modo cliente prepara herramientas seguras para conectarte a otro servidor por FTPS/SFTP sin tocar la carpeta compartida local.
+4. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
+5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
+6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
 Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
@@ -29,6 +30,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `install.sh` es el instalador recomendado para otros equipos.
 - `tools/is.sh` es un alias local para el mismo instalador.
 - `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
+- `tools/client.sh` abre una conexión segura FTPS o SFTP usando `client.env`.
 
 ## Qué incluye
 
@@ -37,6 +39,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - Bloqueo/desbloqueo y escritura por usuario.
 - Usuarios conectados y actividad en vivo.
 - Explorador de archivos de la carpeta compartida.
+- Modo cliente para conectar de forma segura a un servidor externo sin exponer la carpeta compartida local.
 
 ## Estructura del repositorio
 
@@ -45,6 +48,7 @@ ftp-admin/
 ├── main.py
 ├── requirements.txt
 ├── .env.example
+├── client.env.example
 ├── .gitignore
 ├── README.md
 ├── DEPLOY.md
@@ -56,6 +60,7 @@ ftp-admin/
 │       └── app.js
 ├── tools/
 │   ├── is.sh
+│   ├── client.sh
 │   ├── maintenance.sh
 │   ├── registry_db.sh
 │   ├── setup_ubuntu.sh
@@ -98,6 +103,16 @@ Para una release concreta o para elegir entre releases publicadas:
 bash install.sh --release <release-publicada>
 bash install.sh --choose-release
 ```
+
+Si quieres instalar solo el servidor, solo el cliente seguro o ambos:
+
+```bash
+bash install.sh --server
+bash install.sh --client
+bash install.sh --both
+```
+
+El modo cliente genera `client.env` y deja listo `bash tools/client.sh connect` para abrir una conexión FTPS o SFTP.
 
 Si prefieres hacerlo manualmente:
 
