@@ -47,7 +47,6 @@ app = FastAPI(title="Senderman FTP Admin")
 security = HTTPBasic()
 HTML_FILE = Path(__file__).parent / "templates" / "index.html"
 STATIC_DIR = Path(__file__).parent / "static"
-
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ── Utilidades ─────────────────────────────────────────────────────────────────

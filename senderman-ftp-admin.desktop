@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Senderman FTP Admin
+Comment=Inicia el panel con autenticación de Ubuntu
+Exec=bash /home/mr-robot/ftp-admin/tools/launcher.sh start
+Terminal=false
+Categories=Network;System;

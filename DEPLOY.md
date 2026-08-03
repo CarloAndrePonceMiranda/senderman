@@ -98,6 +98,18 @@ sudo systemctl restart senderman-ftp-admin
 sudo systemctl stop senderman-ftp-admin
 ```
 
+## Arranque bajo demanda con autenticación
+
+Si quieres que el panel se inicie solo cuando lo pidas y que Ubuntu te solicite la contraseña del sistema, usa el launcher local:
+
+```bash
+bash tools/launcher.sh start
+```
+
+Ese comando intenta usar `pkexec` para mostrar el diálogo nativo de autenticación y, cuando autorices, levanta `senderman-ftp-admin` y abre `http://localhost:8080`.
+
+Si prefieres un acceso gráfico, puedes instalar [senderman-ftp-admin.desktop](senderman-ftp-admin.desktop) en el escritorio o en el menú de aplicaciones.
+
 ## Checklist final
 
 - `master` es la rama principal.
