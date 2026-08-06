@@ -10,6 +10,7 @@ force_overwrite=false
 release_mode="latest"
 release_selector=""
 install_profile=""
+uninstall_keep_config=false
 client_config_file="client.env"
 
 usage() {
@@ -25,6 +26,7 @@ Uso: bash install.sh [--service] [--force] [--latest-release] [--release <releas
   --client          Instala herramientas seguras de cliente
   --both            Instala servidor y cliente
   --uninstall       Desinstala la aplicación y limpia accesos directos, venv y servicio
+  --keep-config     Con --uninstall, conserva .env, client.env y el registro local
 EOF
 }
 
@@ -77,6 +79,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --uninstall|--desinstalar)
       install_profile="uninstall"
+      shift
+      ;;
+    --keep-config|--preserve-config)
+      uninstall_keep_config=true
       shift
       ;;
     -h|--help)
@@ -255,20 +261,19 @@ install_app_icon() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
   mkdir -p "$icons_dir"
+  rm -f "$icons_dir/senderman-ftp-admin.png" "$icons_dir/senderman-ftp-admin.svg"
 
-  python3 - "$repo_root/static/img/12146723.webp" "$icons_dir/senderman-ftp-admin.png" <<'PY'
-from pathlib import Path
-import sys
-
-from PIL import Image
-
-source_path = Path(sys.argv[1])
-target_path = Path(sys.argv[2])
-
-with Image.open(source_path) as image:
-    image = image.convert('RGBA')
-    image.save(target_path, format='PNG')
-PY
+  cat > "$icons_dir/senderman-ftp-admin.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman FTP Admin">
+  <rect width="256" height="256" rx="44" fill="#0f172a"/>
+  <rect x="28" y="28" width="200" height="200" rx="36" fill="#111827" stroke="#38bdf8" stroke-width="6"/>
+  <circle cx="92" cy="98" r="18" fill="#38bdf8"/>
+  <circle cx="164" cy="98" r="18" fill="#f59e0b"/>
+  <path d="M72 160c14-26 37-39 56-39s42 13 56 39" fill="none" stroke="#e5e7eb" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M72 160h112" fill="none" stroke="#e5e7eb" stroke-width="12" stroke-linecap="round"/>
+  <text x="128" y="214" fill="#e5e7eb" font-family="sans-serif" font-size="28" text-anchor="middle">FTP Admin</text>
+</svg>
+EOF
 }
 
 install_desktop_shortcuts() {
@@ -315,7 +320,7 @@ remove_desktop_shortcuts() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
   rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
-  rm -f "$icons_dir/senderman-ftp-admin.png"
+  rm -f "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png"
 }
 
 uninstall_application() {
@@ -332,7 +337,12 @@ uninstall_application() {
     fi
   fi
 
-  rm -rf .venv .env .senderman-release panel.log client.env senderman_registry.sqlite3 backups
+  if $uninstall_keep_config; then
+    rm -rf .venv .senderman-release panel.log
+    echo "Se conservaron .env, client.env, senderman_registry.sqlite3 y backups."
+  else
+    rm -rf .venv .env .senderman-release panel.log client.env senderman_registry.sqlite3 backups
+  fi
 
   echo "Se eliminaron la aplicación, el servicio y los accesos directos."
 }
