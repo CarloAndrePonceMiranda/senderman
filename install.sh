@@ -170,15 +170,15 @@ launch_installer_menu() {
     clear || true
     if is_installed; then
       menu_header "Senderman installer" "Estado: instalado"
-      echo "1) Reinstalar"
-      echo "2) Actualizar"
-      echo "3) Logs"
-      echo "4) Desinstalar"
-      echo "0) Salir"
-      choice="$(menu_prompt "Escribe reinstalar, actualizar, logs, desinstalar o salir: ")"
+      echo "reinstall - Reinstalar"
+      echo "update - Actualizar"
+      echo "logs - Ver logs"
+      echo "uninstall - Desinstalar"
+      echo "exit - Salir"
+      choice="$(menu_prompt "Escribe un comando: ")"
 
       case "$choice" in
-        1|reinstalar|reinstall|install)
+        reinstall)
           local release_tag
           local args=()
           release_tag="$(current_release_tag || true)"
@@ -196,7 +196,7 @@ launch_installer_menu() {
           run_installer_command "${args[@]}" --server
           read -r -p "Pulsa Enter para continuar..." _
           ;;
-        2|actualizar|update)
+        update)
           local args=(--latest-release)
           if service_is_installed; then
             args=(--service "${args[@]}")
@@ -210,10 +210,10 @@ launch_installer_menu() {
           run_installer_command "${args[@]}" --server
           read -r -p "Pulsa Enter para continuar..." _
           ;;
-        3|logs|log|registro)
+        logs)
           installer_logs
           ;;
-        4|desinstalar|uninstall|remove)
+        uninstall)
           read -r -p "¿Conservar configuración? [y/N]: " reply
           if [[ "$reply" =~ ^[Yy]$ ]]; then
             run_installer_command --uninstall --keep-config
@@ -222,7 +222,7 @@ launch_installer_menu() {
           fi
           read -r -p "Pulsa Enter para continuar..." _
           ;;
-        0|salir|exit|volver)
+        exit)
           exit 0
           ;;
         *)
@@ -231,16 +231,16 @@ launch_installer_menu() {
       esac
     else
       menu_header "Senderman installer" "Estado: no instalado"
-      echo "1) Instalar"
-      echo "0) Salir"
-      choice="$(menu_prompt "Escribe instalar o salir: ")"
+      echo "install - Instalar"
+      echo "exit - Salir"
+      choice="$(menu_prompt "Escribe un comando: ")"
 
       case "$choice" in
-        1|instalar|install)
+        install)
           run_installer_command --latest-release --server
           read -r -p "Pulsa Enter para continuar..." _
           ;;
-        0|salir|exit|volver)
+        exit)
           exit 0
           ;;
         *)
@@ -420,7 +420,15 @@ EOF
 
 install_desktop_shortcuts() {
   local applications_dir
+  local icons_root
+  local app_icon_path
+  local shell_icon_path
+  local tools_icon_path
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  icons_root="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+  app_icon_path="$icons_root/senderman-app.svg"
+  shell_icon_path="$icons_root/senderman-shell.svg"
+  tools_icon_path="$icons_root/senderman-tools.svg"
 
   mkdir -p "$applications_dir"
   install_app_icon
@@ -434,7 +442,7 @@ Name=Senderman APP
 Comment=Abre la aplicación web de Senderman
 Exec=/usr/bin/bash $repo_root/tools/app.sh
 TryExec=/usr/bin/bash
-Icon=senderman-app
+Icon=$app_icon_path
 Terminal=false
 Categories=Network;System;
 StartupNotify=true
@@ -447,7 +455,7 @@ Name=Senderman Shell
 Comment=Abre la shell de administración del servicio
 Exec=/usr/bin/bash -lc 'if command -v gnome-terminal >/dev/null 2>&1; then gnome-terminal --full-screen -- bash "$repo_root/tools/shell.sh"; elif command -v konsole >/dev/null 2>&1; then konsole --fullscreen -e bash "$repo_root/tools/shell.sh"; elif command -v xterm >/dev/null 2>&1; then xterm -fullscreen -e bash "$repo_root/tools/shell.sh"; else bash "$repo_root/tools/shell.sh"; fi'
 TryExec=/usr/bin/bash
-Icon=senderman-shell
+Icon=$shell_icon_path
 Terminal=true
 Categories=Network;System;Utility;
 StartupNotify=true
@@ -460,7 +468,7 @@ Name=Senderman Tools
 Comment=Abre el instalador y menú de configuración
 Exec=/usr/bin/bash -lc 'if command -v gnome-terminal >/dev/null 2>&1; then gnome-terminal --full-screen -- bash "$repo_root/install.sh"; elif command -v konsole >/dev/null 2>&1; then konsole --fullscreen -e bash "$repo_root/install.sh"; elif command -v xterm >/dev/null 2>&1; then xterm -fullscreen -e bash "$repo_root/install.sh"; else bash "$repo_root/install.sh"; fi'
 TryExec=/usr/bin/bash
-Icon=senderman-tools
+Icon=$tools_icon_path
 Terminal=true
 Categories=Network;System;Utility;
 StartupNotify=true

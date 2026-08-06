@@ -102,18 +102,18 @@ shell_menu() {
   while true; do
     echo
     shell_header
-    echo "1) Iniciar servicio"
-    echo "2) Detener servicio"
-    echo "3) Reiniciar servicio"
-    echo "4) Ver estado"
-    echo "5) Habilitar al arranque"
-    echo "6) Deshabilitar al arranque"
-    echo "7) Apagar equipo"
-    echo "0) Salir"
-    choice="$(read_choice "Escribe iniciar, detener, reiniciar, estado, habilitar, deshabilitar, apagar o salir: ")"
+    echo "iniciar - Iniciar servicio"
+    echo "detener - Detener servicio"
+    echo "reiniciar - Reiniciar servicio"
+    echo "estado - Ver estado"
+    echo "habilitar - Habilitar al arranque"
+    echo "deshabilitar - Deshabilitar al arranque"
+    echo "apagar - Apagar equipo"
+    echo "salir - Salir"
+    choice="$(read_choice "Escribe un comando: ")"
 
     case "$choice" in
-      1|iniciar|start)
+      iniciar)
         if service_is_installed; then
           start_service
         else
@@ -121,7 +121,7 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      2|detener|stop)
+      detener)
         if service_is_installed; then
           stop_service
         else
@@ -129,7 +129,7 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      3|reiniciar|restart)
+      reiniciar)
         if service_is_installed; then
           restart_service
         else
@@ -137,7 +137,7 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      4|estado|status)
+      estado)
         if service_is_installed; then
           status_service
         else
@@ -145,7 +145,7 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      5|habilitar|enable)
+      habilitar)
         if service_is_installed; then
           enable_service
         else
@@ -153,7 +153,7 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      6|deshabilitar|disable)
+      deshabilitar)
         if service_is_installed; then
           disable_service
         else
@@ -161,7 +161,7 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      7|apagar|shutdown)
+      apagar)
         if service_is_installed; then
           shutdown_machine
         else
@@ -169,11 +169,12 @@ shell_menu() {
         fi
         pause_shell
         ;;
-      0|salir|exit|volver)
+      salir)
         exit 0
         ;;
       *)
-        echo "Opción inválida."
+        echo "Comando inválido."
+        pause_shell
         ;;
     esac
   done
