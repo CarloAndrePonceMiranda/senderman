@@ -20,7 +20,7 @@ Cuando la instalación termina, el menú de aplicaciones queda dividido en tres 
 
 - `Senderman Monitor`: abre la aplicación web.
 - `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
-- `Senderman Configuration`: abre el menú interactivo para actualizar, reinstalar o desinstalar.
+- `Senderman Configuration`: abre `./install.sh` para el menú interactivo del instalador.
 
 Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
@@ -34,7 +34,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
-- `Senderman Monitor`, `Senderman Shell` y `Senderman Configuration` son los tres accesos que instala el script en el menú de aplicaciones.
+- `Senderman Monitor`, `Senderman Shell` y `Senderman Configuration` son los tres accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
 - `tools/is.sh` es un alias local para el mismo instalador.
 - `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
 - `tools/client.sh` abre una conexión segura FTPS o SFTP usando `client.env`.
@@ -361,7 +361,7 @@ bash tools/launcher.sh start
 
 El launcher intenta abrir el diálogo de `pkexec`, arranca `senderman-ftp-admin` y después abre `http://localhost:8080`.
 
-Si quieres acceso con doble clic, puedes usar [senderman-ftp-admin.desktop](senderman-ftp-admin.desktop) como lanzador gráfico.
+Si quieres acceso con doble clic, puedes usar [Senderman Monitor](senderman-ftp-admin.desktop), [Senderman Shell](senderman-ftp-admin-shell.desktop) o [Senderman Configuration](senderman-ftp-admin-menu.desktop) como lanzadores gráficos.
 
 ---
 

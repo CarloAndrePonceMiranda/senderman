@@ -30,7 +30,7 @@ Al final de la instalación quedan tres accesos en el menú de aplicaciones:
 
 - `Senderman Monitor`: abre la web.
 - `Senderman Shell`: abre el terminal de administración del servicio.
-- `Senderman Configuration`: abre el menú de actualización, reinstalación y desinstalación.
+- `Senderman Configuration`: abre `./install.sh` para el menú de actualización, reinstalación y desinstalación.
 
 ## Configuración
 
@@ -126,7 +126,7 @@ bash tools/launcher.sh start
 
 Ese comando intenta usar `pkexec` para mostrar el diálogo nativo de autenticación y, cuando autorices, levanta `senderman-ftp-admin` y abre `http://localhost:8080`.
 
-Si prefieres un acceso gráfico, puedes instalar [senderman-ftp-admin.desktop](senderman-ftp-admin.desktop) en el escritorio o en el menú de aplicaciones.
+Si prefieres un acceso gráfico, puedes instalar [Senderman Monitor](senderman-ftp-admin.desktop), [Senderman Shell](senderman-ftp-admin-shell.desktop) o [Senderman Configuration](senderman-ftp-admin-menu.desktop) en el escritorio o en el menú de aplicaciones.
 
 ## Checklist final
 

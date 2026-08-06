@@ -261,17 +261,38 @@ install_app_icon() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
   mkdir -p "$icons_dir"
-  rm -f "$icons_dir/senderman-ftp-admin.png" "$icons_dir/senderman-ftp-admin.svg"
+  rm -f "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/senderman-ftp-admin.svg"
 
-  cat > "$icons_dir/senderman-ftp-admin.svg" <<'EOF'
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman FTP Admin">
-  <rect width="256" height="256" rx="44" fill="#0f172a"/>
-  <rect x="28" y="28" width="200" height="200" rx="36" fill="#111827" stroke="#38bdf8" stroke-width="6"/>
-  <circle cx="92" cy="98" r="18" fill="#38bdf8"/>
-  <circle cx="164" cy="98" r="18" fill="#f59e0b"/>
-  <path d="M72 160c14-26 37-39 56-39s42 13 56 39" fill="none" stroke="#e5e7eb" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M72 160h112" fill="none" stroke="#e5e7eb" stroke-width="12" stroke-linecap="round"/>
-  <text x="128" y="214" fill="#e5e7eb" font-family="sans-serif" font-size="28" text-anchor="middle">FTP Admin</text>
+  cat > "$icons_dir/senderman-monitor.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Monitor">
+  <rect width="256" height="256" rx="44" fill="#0b1220"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#22c55e" stroke-width="8"/>
+  <rect x="46" y="50" width="164" height="132" rx="14" fill="#0f172a" stroke="#374151" stroke-width="4"/>
+  <path d="M62 144c14-28 28-42 42-42 18 0 18 30 36 30 14 0 20-10 28-22 12-18 24-26 38-26" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="182" cy="86" r="10" fill="#22c55e"/>
+  <rect x="96" y="208" width="64" height="14" rx="7" fill="#94a3b8"/>
+</svg>
+EOF
+
+  cat > "$icons_dir/senderman-shell.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Shell">
+  <rect width="256" height="256" rx="44" fill="#0b1220"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#38bdf8" stroke-width="8"/>
+  <rect x="48" y="50" width="160" height="132" rx="14" fill="#0a0f18" stroke="#1f2937" stroke-width="4"/>
+  <path d="M68 90l28 26-28 26" fill="none" stroke="#38bdf8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M112 142h44" fill="none" stroke="#e5e7eb" stroke-width="10" stroke-linecap="round"/>
+  <rect x="94" y="208" width="68" height="14" rx="7" fill="#94a3b8"/>
+</svg>
+EOF
+
+  cat > "$icons_dir/senderman-configuration.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Configuration">
+  <rect width="256" height="256" rx="44" fill="#0b1220"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#f59e0b" stroke-width="8"/>
+  <circle cx="128" cy="116" r="34" fill="#f59e0b"/>
+  <circle cx="128" cy="116" r="18" fill="#111827"/>
+  <path d="M128 66v18M128 148v18M78 116h18M160 116h18M92 80l12 12M152 140l12 12M164 80l-12 12M104 140l-12 12" stroke="#e5e7eb" stroke-width="10" stroke-linecap="round"/>
+  <rect x="92" y="208" width="72" height="14" rx="7" fill="#94a3b8"/>
 </svg>
 EOF
 }
@@ -283,6 +304,8 @@ install_desktop_shortcuts() {
   mkdir -p "$applications_dir"
   install_app_icon
 
+  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop"
+
   cat > "$applications_dir/senderman-ftp-admin-monitor.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -290,7 +313,7 @@ Name=Senderman Monitor
 Comment=Abre el panel web de administración
 Exec=/usr/bin/bash $repo_root/tools/launcher.sh start
 TryExec=/usr/bin/bash
-Icon=senderman-ftp-admin
+Icon=senderman-monitor
 Terminal=false
 Categories=Network;System;
 StartupNotify=true
@@ -303,7 +326,7 @@ Name=Senderman Shell
 Comment=Abre el terminal de administración del servicio
 Exec=/usr/bin/bash $repo_root/tools/shell.sh
 TryExec=/usr/bin/bash
-Icon=senderman-ftp-admin
+Icon=senderman-shell
 Terminal=true
 Categories=Network;System;Utility;
 StartupNotify=true
@@ -313,10 +336,10 @@ EOF
 [Desktop Entry]
 Type=Application
 Name=Senderman Configuration
-Comment=Abre el menú interactivo de instalación y mantenimiento
-Exec=/usr/bin/bash $repo_root/tools/menu.sh
+Comment=Abre el menú interactivo del instalador
+Exec=/usr/bin/bash $repo_root/install.sh
 TryExec=/usr/bin/bash
-Icon=senderman-ftp-admin
+Icon=senderman-configuration
 Terminal=true
 Categories=Network;System;Utility;
 StartupNotify=true
@@ -332,8 +355,8 @@ remove_desktop_shortcuts() {
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
-  rm -f "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop"
-  rm -f "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png"
+  rm -f "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
+  rm -f "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png"
 }
 
 uninstall_application() {
