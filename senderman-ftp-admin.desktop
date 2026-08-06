@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=web VSFTPD
+Name=SFTP Monitor
 Comment=Abre el panel web de administración
 Exec=/usr/bin/bash /home/mr-robot/ftp-admin/tools/launcher.sh start
 TryExec=/usr/bin/bash

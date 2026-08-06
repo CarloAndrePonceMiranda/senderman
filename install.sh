@@ -14,7 +14,7 @@ client_config_file="client.env"
 
 usage() {
   cat <<'EOF'
-Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--client|--both]
+Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--client|--both|--uninstall]
 
   --service         Instala y habilita el servicio systemd
   --force           Sobrescribe .env si ya existe
@@ -24,6 +24,7 @@ Uso: bash install.sh [--service] [--force] [--latest-release] [--release <releas
   --server          Instala el panel/servidor FTP
   --client          Instala herramientas seguras de cliente
   --both            Instala servidor y cliente
+  --uninstall       Desinstala la aplicación y limpia accesos directos, venv y servicio
 EOF
 }
 
@@ -74,6 +75,10 @@ while [[ $# -gt 0 ]]; do
       install_profile="both"
       shift
       ;;
+    --uninstall|--desinstalar)
+      install_profile="uninstall"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -91,6 +96,34 @@ prompt_confirm() {
   local reply
   read -r -p "$message [y/N]: " reply
   [[ "$reply" =~ ^[Yy]$ ]]
+}
+
+open_config_review() {
+  local files=(".env.example" ".env")
+
+  if command -v code >/dev/null 2>&1; then
+    code --reuse-window "${files[@]}" >/dev/null 2>&1 &
+    return 0
+  fi
+
+  if [ -n "${VISUAL:-${EDITOR:-}}" ] && command -v "${VISUAL:-${EDITOR:-}}" >/dev/null 2>&1; then
+    "${VISUAL:-${EDITOR:-}}" "${files[@]}"
+    return 0
+  fi
+
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open ".env.example" >/dev/null 2>&1 || true
+    xdg-open ".env" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  echo
+  echo "No se encontró un editor gráfico. Mostrando archivos en terminal:"
+  for file in "${files[@]}"; do
+    echo
+    echo "== $file =="
+    sed -n '1,120p' "$file"
+  done
 }
 
 generate_password() {
@@ -148,6 +181,9 @@ prompt_install_profile() {
   local reply
 
   if [ -n "$install_profile" ]; then
+    if [ "$install_profile" = "uninstall" ]; then
+      return
+    fi
     install_profile="$(normalize_profile "$install_profile")"
     if [ -z "$install_profile" ]; then
       echo "error: modo de instalación inválido"
@@ -184,6 +220,13 @@ install_client_tools() {
   echo "Instalando herramientas de cliente seguro..."
   sudo apt-get update
   sudo apt-get install -y lftp openssh-client ca-certificates
+
+  if sudo apt-get -s autoremove --purge 2>/dev/null | grep -q '^Remv\|^The following packages will be REMOVED:'; then
+    echo
+    if prompt_confirm "¿Quieres eliminar dependencias ya no necesarias con autoremove?"; then
+      sudo apt-get autoremove --purge -y
+    fi
+  fi
 }
 
 write_client_config() {
@@ -238,7 +281,7 @@ install_desktop_shortcuts() {
   cat > "$applications_dir/senderman-ftp-admin.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=web VSFTPD
+Name=SFTP Monitor
 Comment=Abre el panel web de administración
 Exec=/usr/bin/bash $repo_root/tools/launcher.sh start
 TryExec=/usr/bin/bash
@@ -251,7 +294,7 @@ EOF
   cat > "$applications_dir/senderman-ftp-admin-menu.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=shell VSFTPD - Shell
+Name=SFTP Shell
 Comment=Abre el menú interactivo de instalación y mantenimiento
 Exec=/usr/bin/bash $repo_root/tools/menu.sh
 TryExec=/usr/bin/bash
@@ -263,6 +306,35 @@ EOF
 
   chmod 644 "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
   echo "Se instalaron los accesos directos en $applications_dir."
+}
+
+remove_desktop_shortcuts() {
+  local applications_dir
+  local icons_dir
+  applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+
+  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
+  rm -f "$icons_dir/senderman-ftp-admin.png"
+}
+
+uninstall_application() {
+  echo "== Desinstalación de Senderman FTP Admin =="
+
+  remove_desktop_shortcuts
+
+  if command -v sudo >/dev/null 2>&1; then
+    if systemctl list-unit-files | grep -q '^senderman-ftp-admin\.service'; then
+      sudo systemctl stop senderman-ftp-admin || true
+      sudo systemctl disable senderman-ftp-admin || true
+      sudo rm -f "/etc/systemd/system/$service_name.service"
+      sudo systemctl daemon-reload || true
+    fi
+  fi
+
+  rm -rf .venv .env .senderman-release panel.log client.env senderman_registry.sqlite3 backups
+
+  echo "Se eliminaron la aplicación, el servicio y los accesos directos."
 }
 
 prompt_client_profile() {
@@ -685,6 +757,11 @@ fi
 
 prompt_install_profile
 
+if [ "$install_profile" = "uninstall" ]; then
+  uninstall_application
+  exit 0
+fi
+
 if [ "$install_profile" != "client" ]; then
   if ! python3 -c 'import venv' >/dev/null 2>&1; then
     echo "error: python3-venv no está instalado"
@@ -747,7 +824,9 @@ if [ "$install_profile" != "client" ]; then
 
   echo
   echo "Revisa .env si quieres ajustar ADMIN_USER, FTP_LOG, VSFTPD_CONF o FILES_DIR."
-  prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?" || true
+  if prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?"; then
+    open_config_review
+  fi
 
   if [ "$install_profile" != "client" ] && $install_service; then
     if ! command -v sudo >/dev/null 2>&1; then
