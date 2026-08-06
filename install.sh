@@ -207,6 +207,64 @@ EOF
   echo "Se creó $client_config_file con permisos 600."
 }
 
+install_app_icon() {
+  local icons_dir
+  icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+
+  mkdir -p "$icons_dir"
+
+  python3 - "$repo_root/static/img/12146723.webp" "$icons_dir/senderman-ftp-admin.png" <<'PY'
+from pathlib import Path
+import sys
+
+from PIL import Image
+
+source_path = Path(sys.argv[1])
+target_path = Path(sys.argv[2])
+
+with Image.open(source_path) as image:
+    image = image.convert('RGBA')
+    image.save(target_path, format='PNG')
+PY
+}
+
+install_desktop_shortcuts() {
+  local applications_dir
+  applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+
+  mkdir -p "$applications_dir"
+  install_app_icon
+
+  cat > "$applications_dir/senderman-ftp-admin.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=web VSFTPD
+Comment=Abre el panel web de administración
+Exec=/usr/bin/bash $repo_root/tools/launcher.sh start
+TryExec=/usr/bin/bash
+Icon=senderman-ftp-admin
+Terminal=false
+Categories=Network;System;
+StartupNotify=true
+EOF
+
+  cat > "$applications_dir/senderman-ftp-admin-menu.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=shell VSFTPD - Shell
+Comment=Abre el menú interactivo de instalación y mantenimiento
+Exec=/usr/bin/bash $repo_root/tools/menu.sh
+TryExec=/usr/bin/bash
+Icon=senderman-ftp-admin
+Terminal=true
+Categories=Network;System;Utility;
+StartupNotify=true
+EOF
+
+  chmod 644 "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
+  echo "Se instalaron los accesos directos en $applications_dir."
+}
+
 prompt_client_profile() {
   local host
   local port
@@ -713,6 +771,10 @@ if [ "$install_profile" != "server" ]; then
   install_client_tools
   write_client_config
   prompt_client_profile
+fi
+
+if [ "$install_profile" != "client" ]; then
+  install_desktop_shortcuts
 fi
 
 echo

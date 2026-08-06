@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=shell VSFTPD - Shell
+Comment=Abre el menú interactivo de instalación y mantenimiento
+Exec=/usr/bin/bash /home/mr-robot/ftp-admin/tools/menu.sh
+TryExec=/usr/bin/bash
+Icon=senderman-ftp-admin
+Terminal=true
+Categories=Network;System;Utility;
+StartupNotify=true
