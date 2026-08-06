@@ -11,10 +11,12 @@ release_mode="latest"
 release_selector=""
 install_profile=""
 uninstall_keep_config=false
+reset_secrets=false
 
 usage() {
   cat <<'EOF'
 Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--uninstall]
+Usage: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--uninstall] [--reset-secrets]
 
   --service         Instala y habilita el servicio systemd
   --force           Sobrescribe .env si ya existe
@@ -24,6 +26,7 @@ Uso: bash install.sh [--service] [--force] [--latest-release] [--release <releas
   --server          Instala el panel/servidor FTP
   --uninstall       Desinstala la aplicación y limpia accesos directos, venv y servicio
   --keep-config     Con --uninstall, conserva .env y el registro local
+  --reset-secrets   Con --server, vuelve a pedir ADMIN_PASS aunque ya exista
 EOF
 }
 
@@ -74,6 +77,10 @@ while [[ $# -gt 0 ]]; do
       uninstall_keep_config=true
       shift
       ;;
+    --reset-secrets)
+      reset_secrets=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -98,6 +105,16 @@ is_installed() {
     return 0
   fi
 
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${service_name}\.service"; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+service_is_installed() {
   if command -v systemctl >/dev/null 2>&1; then
     if systemctl list-unit-files 2>/dev/null | grep -q "^${service_name}\.service"; then
       return 0
@@ -193,7 +210,7 @@ launch_installer_menu() {
             args=(--service "${args[@]}")
           fi
 
-          run_installer_command "${args[@]}" --server
+          env SENDERMAN_INSTALLER_NO_MENU=1 bash "$repo_root/install.sh" "${args[@]}" --server --reset-secrets
           read -r -p "Pulsa Enter para continuar..." _
           ;;
         update)
@@ -931,7 +948,16 @@ else
 fi
 
 current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
-if [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
+if $reset_secrets; then
+  echo
+  read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
+  if [ -z "$admin_pass" ]; then
+    admin_pass="$(generate_password)"
+    echo "ADMIN_PASS generado automáticamente."
+    echo "Guárdalo ahora: $admin_pass"
+  fi
+  set_env_value "ADMIN_PASS" "$admin_pass"
+elif [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
   echo
   read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
   if [ -z "$admin_pass" ]; then

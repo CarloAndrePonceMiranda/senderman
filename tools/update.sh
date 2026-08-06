@@ -454,7 +454,7 @@ from pathlib import Path
 
 tarball_url = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
-keep = {".git", ".venv", ".env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
+keep = {".git", ".venv", ".env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release", "tools/update.sh"}
 
 with tempfile.TemporaryDirectory() as temp_dir:
 		temp_path = Path(temp_dir)
@@ -484,6 +484,8 @@ with tempfile.TemporaryDirectory() as temp_dir:
 		for path in source_root.rglob("*"):
 				relative_path = path.relative_to(source_root)
 				if path == archive_path:
+					continue
+				if relative_path.as_posix() == "tools/update.sh":
 					continue
 				if relative_path.parts and relative_path.parts[0] in keep:
 						continue
@@ -522,8 +524,7 @@ if [ "$current_release_tag" = "$release_tag" ]; then
 fi
 
 if [ -n "$(git status --porcelain)" ]; then
-	echo "error: hay cambios locales sin guardar. Haz commit, stash o limpia el árbol antes de actualizar."
-	exit 1
+	echo "warning: el árbol tiene cambios locales; la actualización continuará con el estado actual"
 fi
 
 if [ ! -d .venv ]; then
