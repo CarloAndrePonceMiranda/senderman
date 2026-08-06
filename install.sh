@@ -11,11 +11,10 @@ release_mode="latest"
 release_selector=""
 install_profile=""
 uninstall_keep_config=false
-client_config_file="client.env"
 
 usage() {
   cat <<'EOF'
-Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--client|--both|--uninstall]
+Uso: bash install.sh [--service] [--force] [--latest-release] [--release <release>] [--choose-release] [--server|--uninstall]
 
   --service         Instala y habilita el servicio systemd
   --force           Sobrescribe .env si ya existe
@@ -23,10 +22,8 @@ Uso: bash install.sh [--service] [--force] [--latest-release] [--release <releas
   --release <release> Instala una release publicada concreta
   --choose-release  Muestra una lista de releases publicadas y deja elegir una
   --server          Instala el panel/servidor FTP
-  --client          Instala herramientas seguras de cliente
-  --both            Instala servidor y cliente
   --uninstall       Desinstala la aplicación y limpia accesos directos, venv y servicio
-  --keep-config     Con --uninstall, conserva .env, client.env y el registro local
+  --keep-config     Con --uninstall, conserva .env y el registro local
 EOF
 }
 
@@ -69,14 +66,6 @@ while [[ $# -gt 0 ]]; do
       install_profile="server"
       shift
       ;;
-    --client|--cliente)
-      install_profile="client"
-      shift
-      ;;
-    --both|--ambos)
-      install_profile="both"
-      shift
-      ;;
     --uninstall|--desinstalar)
       install_profile="uninstall"
       shift
@@ -102,6 +91,158 @@ prompt_confirm() {
   local reply
   read -r -p "$message [y/N]: " reply
   [[ "$reply" =~ ^[Yy]$ ]]
+}
+
+is_installed() {
+  if [ -f .senderman-release ] || [ -d .venv ]; then
+    return 0
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${service_name}\.service"; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+current_release_tag() {
+  if [ -f .senderman-release ]; then
+    tr -d '\n' < .senderman-release
+  fi
+}
+
+menu_header() {
+  local title="$1"
+  local subtitle="${2:-}"
+
+  printf '\033[36m====================================================================\033[0m\n'
+  printf '\033[1;32m%s\033[0m\n' "$title"
+  if [ -n "$subtitle" ]; then
+    printf '\033[0;37m%s\033[0m\n' "$subtitle"
+  fi
+  printf '\033[36m====================================================================\033[0m\n'
+}
+
+menu_prompt() {
+  local prompt="$1"
+  local reply
+  read -r -p "$prompt" reply
+  printf '%s' "$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+}
+
+run_installer_command() {
+  env SENDERMAN_INSTALLER_NO_MENU=1 bash "$repo_root/install.sh" "$@"
+}
+
+installer_logs() {
+  menu_header "Senderman installer" "Logs"
+
+  if service_is_installed && command -v journalctl >/dev/null 2>&1; then
+    if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+      journalctl -u "$service_name" --no-pager -n 80
+    elif command -v sudo >/dev/null 2>&1; then
+      sudo journalctl -u "$service_name" --no-pager -n 80
+    else
+      echo "No hay permisos para consultar journalctl."
+    fi
+  elif [ -f panel.log ]; then
+    tail -n 80 panel.log
+  else
+    echo "No hay logs disponibles todavía."
+  fi
+
+  echo
+  read -r -p "Pulsa Enter para volver..." _
+}
+
+launch_installer_menu() {
+  while true; do
+    clear || true
+    if is_installed; then
+      menu_header "Senderman installer" "Estado: instalado"
+      echo "1) Reinstalar"
+      echo "2) Actualizar"
+      echo "3) Logs"
+      echo "4) Desinstalar"
+      echo "0) Salir"
+      choice="$(menu_prompt "Escribe reinstalar, actualizar, logs, desinstalar o salir: ")"
+
+      case "$choice" in
+        1|reinstalar|reinstall|install)
+          local release_tag
+          local args=()
+          release_tag="$(current_release_tag || true)"
+
+          if [ -n "$release_tag" ]; then
+            args=(--release "$release_tag")
+          else
+            args=(--latest-release)
+          fi
+
+          if service_is_installed; then
+            args=(--service "${args[@]}")
+          fi
+
+          run_installer_command "${args[@]}" --server
+          read -r -p "Pulsa Enter para continuar..." _
+          ;;
+        2|actualizar|update)
+          local args=(--latest-release)
+          if service_is_installed; then
+            args=(--service "${args[@]}")
+          fi
+
+          read -r -p "Elige release manualmente? [y/N]: " reply
+          if [[ "$reply" =~ ^[Yy]$ ]]; then
+            args=(--choose-release)
+          fi
+
+          run_installer_command "${args[@]}" --server
+          read -r -p "Pulsa Enter para continuar..." _
+          ;;
+        3|logs|log|registro)
+          installer_logs
+          ;;
+        4|desinstalar|uninstall|remove)
+          read -r -p "¿Conservar configuración? [y/N]: " reply
+          if [[ "$reply" =~ ^[Yy]$ ]]; then
+            run_installer_command --uninstall --keep-config
+          else
+            run_installer_command --uninstall
+          fi
+          read -r -p "Pulsa Enter para continuar..." _
+          ;;
+        0|salir|exit|volver)
+          exit 0
+          ;;
+        *)
+          echo "Opción inválida."
+          sleep 1
+          ;;
+      esac
+    else
+      menu_header "Senderman installer" "Estado: no instalado"
+      echo "1) Instalar"
+      echo "0) Salir"
+      choice="$(menu_prompt "Escribe instalar o salir: ")"
+
+      case "$choice" in
+        1|instalar|install)
+          run_installer_command --latest-release --server
+          read -r -p "Pulsa Enter para continuar..." _
+          ;;
+        0|salir|exit|volver)
+          exit 0
+          ;;
+        *)
+          echo "Opción inválida."
+          sleep 1
+          ;;
+      esac
+    fi
+  done
 }
 
 open_config_review() {
@@ -168,14 +309,11 @@ PY
 
 normalize_profile() {
   case "${1:-}" in
-    server|servidor)
+    server|servidor|"")
       echo "server"
       ;;
-    client|cliente)
-      echo "client"
-      ;;
-    both|ambos)
-      echo "both"
+    uninstall|desinstalar)
+      echo "uninstall"
       ;;
     *)
       echo ""
@@ -184,76 +322,19 @@ normalize_profile() {
 }
 
 prompt_install_profile() {
-  local reply
-
-  if [ -n "$install_profile" ]; then
-    if [ "$install_profile" = "uninstall" ]; then
-      return
-    fi
-    install_profile="$(normalize_profile "$install_profile")"
-    if [ -z "$install_profile" ]; then
-      echo "error: modo de instalación inválido"
-      exit 1
-    fi
+  if [ "$install_profile" = "uninstall" ]; then
     return
   fi
 
-  if [ ! -t 0 ]; then
+  if [ -z "$install_profile" ] && [ ! -t 0 ]; then
     install_profile="server"
     return
   fi
 
-  echo
-  read -r -p "¿Qué deseas instalar? [servidor/cliente/ambos] (servidor): " reply
-  install_profile="$(normalize_profile "${reply:-server}")"
-  if [ -z "$install_profile" ]; then
+  if [ -n "$install_profile" ] && [ "$install_profile" != "server" ]; then
     echo "error: modo de instalación inválido"
     exit 1
   fi
-}
-
-install_client_tools() {
-  if ! command -v sudo >/dev/null 2>&1; then
-    echo "aviso: no hay sudo disponible; instala manualmente lftp, openssh-client y ca-certificates"
-    return 0
-  fi
-
-  if ! command -v apt-get >/dev/null 2>&1; then
-    echo "aviso: apt-get no está disponible; instala manualmente lftp, openssh-client y ca-certificates"
-    return 0
-  fi
-
-  echo "Instalando herramientas de cliente seguro..."
-  sudo apt-get update
-  sudo apt-get install -y lftp openssh-client ca-certificates
-
-  if sudo apt-get -s autoremove --purge 2>/dev/null | grep -q '^Remv\|^The following packages will be REMOVED:'; then
-    echo
-    if prompt_confirm "¿Quieres eliminar dependencias ya no necesarias con autoremove?"; then
-      sudo apt-get autoremove --purge -y
-    fi
-  fi
-}
-
-write_client_config() {
-  if [ -f "$client_config_file" ] && ! $force_overwrite; then
-    echo "$client_config_file ya existe; no se sobrescribió."
-    return 0
-  fi
-
-  cat > "$client_config_file" <<'EOF'
-# Cliente seguro Senderman
-SENDERMAN_CLIENT_PROTOCOL=ftps
-SENDERMAN_CLIENT_HOST=
-SENDERMAN_CLIENT_PORT=21
-SENDERMAN_CLIENT_USER=
-
-# Opcionales:
-# SENDERMAN_CLIENT_VERIFY=yes
-# SENDERMAN_CLIENT_CA_FILE=/ruta/a/ca.crt
-EOF
-  chmod 600 "$client_config_file"
-  echo "Se creó $client_config_file con permisos 600."
 }
 
 install_app_icon() {
@@ -261,15 +342,16 @@ install_app_icon() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
   mkdir -p "$icons_dir"
-  rm -f "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/senderman-ftp-admin.svg"
+  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/senderman-ftp-admin.svg"
 
-  cat > "$icons_dir/senderman-monitor.svg" <<'EOF'
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Monitor">
+  cat > "$icons_dir/senderman-app.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman APP">
   <rect width="256" height="256" rx="44" fill="#0b1220"/>
-  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#22c55e" stroke-width="8"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#00ff66" stroke-width="8"/>
   <rect x="46" y="50" width="164" height="132" rx="14" fill="#0f172a" stroke="#374151" stroke-width="4"/>
-  <path d="M62 144c14-28 28-42 42-42 18 0 18 30 36 30 14 0 20-10 28-22 12-18 24-26 38-26" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="182" cy="86" r="10" fill="#22c55e"/>
+  <path d="M60 150h136" fill="none" stroke="#00ff66" stroke-width="10" stroke-linecap="round"/>
+  <path d="M74 122h108" fill="none" stroke="#00d9ff" stroke-width="8" stroke-linecap="round"/>
+  <path d="M92 94h72" fill="none" stroke="#00ff66" stroke-width="8" stroke-linecap="round"/>
   <rect x="96" y="208" width="64" height="14" rx="7" fill="#94a3b8"/>
 </svg>
 EOF
@@ -277,21 +359,21 @@ EOF
   cat > "$icons_dir/senderman-shell.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Shell">
   <rect width="256" height="256" rx="44" fill="#0b1220"/>
-  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#38bdf8" stroke-width="8"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#00d9ff" stroke-width="8"/>
   <rect x="48" y="50" width="160" height="132" rx="14" fill="#0a0f18" stroke="#1f2937" stroke-width="4"/>
-  <path d="M68 90l28 26-28 26" fill="none" stroke="#38bdf8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M68 90l28 26-28 26" fill="none" stroke="#00d9ff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M112 142h44" fill="none" stroke="#e5e7eb" stroke-width="10" stroke-linecap="round"/>
   <rect x="94" y="208" width="68" height="14" rx="7" fill="#94a3b8"/>
 </svg>
 EOF
 
-  cat > "$icons_dir/senderman-configuration.svg" <<'EOF'
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Configuration">
+  cat > "$icons_dir/senderman-tools.svg" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Tools">
   <rect width="256" height="256" rx="44" fill="#0b1220"/>
-  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#f59e0b" stroke-width="8"/>
-  <circle cx="128" cy="116" r="34" fill="#f59e0b"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#00ff66" stroke-width="8"/>
+  <circle cx="128" cy="116" r="34" fill="#00ff66"/>
   <circle cx="128" cy="116" r="18" fill="#111827"/>
-  <path d="M128 66v18M128 148v18M78 116h18M160 116h18M92 80l12 12M152 140l12 12M164 80l-12 12M104 140l-12 12" stroke="#e5e7eb" stroke-width="10" stroke-linecap="round"/>
+  <path d="M128 66v18M128 148v18M78 116h18M160 116h18M92 80l12 12M152 140l12 12M164 80l-12 12M104 140l-12 12" stroke="#00d9ff" stroke-width="10" stroke-linecap="round"/>
   <rect x="92" y="208" width="72" height="14" rx="7" fill="#94a3b8"/>
 </svg>
 EOF
@@ -304,27 +386,27 @@ install_desktop_shortcuts() {
   mkdir -p "$applications_dir"
   install_app_icon
 
-  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop"
+  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/sftp-menu.desktop"
 
-  cat > "$applications_dir/senderman-ftp-admin-monitor.desktop" <<EOF
+  cat > "$applications_dir/senderman-app.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Senderman Monitor
-Comment=Abre el panel web de administración
-Exec=/usr/bin/bash $repo_root/tools/launcher.sh start
+Name=Senderman APP
+Comment=Abre la aplicación web de Senderman
+Exec=/usr/bin/bash $repo_root/tools/app.sh
 TryExec=/usr/bin/bash
-Icon=senderman-monitor
+Icon=senderman-app
 Terminal=false
 Categories=Network;System;
 StartupNotify=true
 EOF
 
-  cat > "$applications_dir/senderman-ftp-admin-shell.desktop" <<EOF
+  cat > "$applications_dir/senderman-shell.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Senderman Shell
-Comment=Abre el terminal de administración del servicio
-Exec=/usr/bin/bash $repo_root/tools/shell.sh
+Comment=Abre la shell de administración del servicio
+Exec=/usr/bin/bash -lc 'if command -v gnome-terminal >/dev/null 2>&1; then gnome-terminal --full-screen -- bash "$repo_root/tools/shell.sh"; elif command -v konsole >/dev/null 2>&1; then konsole --fullscreen -e bash "$repo_root/tools/shell.sh"; elif command -v xterm >/dev/null 2>&1; then xterm -fullscreen -e bash "$repo_root/tools/shell.sh"; else bash "$repo_root/tools/shell.sh"; fi'
 TryExec=/usr/bin/bash
 Icon=senderman-shell
 Terminal=true
@@ -332,20 +414,20 @@ Categories=Network;System;Utility;
 StartupNotify=true
 EOF
 
-  cat > "$applications_dir/senderman-ftp-admin-configuration.desktop" <<EOF
+  cat > "$applications_dir/senderman-tools.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Senderman Configuration
-Comment=Abre el menú interactivo del instalador
-Exec=/usr/bin/bash $repo_root/install.sh
+Name=Senderman Tools
+Comment=Abre el instalador y menú de configuración
+Exec=/usr/bin/bash -lc 'if command -v gnome-terminal >/dev/null 2>&1; then gnome-terminal --full-screen -- bash "$repo_root/install.sh"; elif command -v konsole >/dev/null 2>&1; then konsole --fullscreen -e bash "$repo_root/install.sh"; elif command -v xterm >/dev/null 2>&1; then xterm -fullscreen -e bash "$repo_root/install.sh"; else bash "$repo_root/install.sh"; fi'
 TryExec=/usr/bin/bash
-Icon=senderman-configuration
+Icon=senderman-tools
 Terminal=true
 Categories=Network;System;Utility;
 StartupNotify=true
 EOF
 
-  chmod 644 "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop"
+  chmod 644 "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop"
   echo "Se instalaron los accesos directos en $applications_dir."
 }
 
@@ -355,8 +437,8 @@ remove_desktop_shortcuts() {
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
-  rm -f "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
-  rm -f "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png"
+  rm -f "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
 }
 
 uninstall_application() {
@@ -375,74 +457,12 @@ uninstall_application() {
 
   if $uninstall_keep_config; then
     rm -rf .venv .senderman-release panel.log
-    echo "Se conservaron .env, client.env, senderman_registry.sqlite3 y backups."
+    echo "Se conservaron .env, senderman_registry.sqlite3 y backups."
   else
-    rm -rf .venv .env .senderman-release panel.log client.env senderman_registry.sqlite3 backups
+    rm -rf .venv .env .senderman-release panel.log senderman_registry.sqlite3 backups
   fi
 
   echo "Se eliminaron la aplicación, el servicio y los accesos directos."
-}
-
-prompt_client_profile() {
-  local host
-  local port
-  local user
-  local protocol
-  local verify
-  local ca_file
-
-  if [ ! -t 0 ]; then
-    return 0
-  fi
-
-  echo
-  read -r -p "Modo de cliente [ftps/sftp] (ftps): " protocol
-  protocol="${protocol:-ftps}"
-
-  read -r -p "Servidor o IP remoto: " host
-  read -r -p "Puerto remoto (21 para FTPS, 2222 para SFTP): " port
-  read -r -p "Usuario remoto: " user
-
-  if [ -z "$host" ] || [ -z "$user" ]; then
-    echo "aviso: faltan datos de cliente; deja $client_config_file para configurarlo después"
-    return 0
-  fi
-
-  if [ "$protocol" = "sftp" ]; then
-    port="${port:-2222}"
-  else
-    port="${port:-21}"
-  fi
-
-  if [ "$protocol" = "ftps" ]; then
-    read -r -p "¿Verificar certificado TLS? [Y/n]: " verify
-    verify="${verify:-yes}"
-    if [[ "$verify" =~ ^[Nn]$ ]]; then
-      verify="no"
-    else
-      verify="yes"
-    fi
-
-    ca_file=""
-    if [ "$verify" = "yes" ]; then
-      read -r -p "Ruta opcional de la CA (.crt) para confiar en el servidor: " ca_file
-    fi
-  fi
-
-  {
-    echo "SENDERMAN_CLIENT_PROTOCOL=$protocol"
-    echo "SENDERMAN_CLIENT_HOST=$host"
-    echo "SENDERMAN_CLIENT_PORT=$port"
-    echo "SENDERMAN_CLIENT_USER=$user"
-    if [ "$protocol" = "ftps" ]; then
-      echo "SENDERMAN_CLIENT_VERIFY=$verify"
-      if [ -n "$ca_file" ]; then
-        echo "SENDERMAN_CLIENT_CA_FILE=$ca_file"
-      fi
-    fi
-  } > "$client_config_file"
-  chmod 600 "$client_config_file"
-  echo "Se guardó la configuración de cliente en $client_config_file."
 }
 
 get_repo_slug() {
@@ -730,7 +750,7 @@ from pathlib import Path
 
 tarball_url = sys.argv[1]
 repo_root = Path(sys.argv[2]).resolve()
-keep = {".git", ".venv", ".env", "client.env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
+keep = {".git", ".venv", ".env", "panel.log", "users.json", "senderman_registry.sqlite3", "backups", "local-tools", ".senderman-release"}
 
 with tempfile.TemporaryDirectory() as temp_dir:
   temp_path = Path(temp_dir)
@@ -836,97 +856,74 @@ if [ "${SENDERMAN_INSTALLER_SKIP_BOOTSTRAP:-0}" != "1" ]; then
   exec env SENDERMAN_INSTALLER_SKIP_BOOTSTRAP=1 bash "$repo_root/install.sh" "$@"
 fi
 
-if [ "$install_profile" != "client" ]; then
-  if [ ! -d .venv ]; then
-    echo "Creando entorno virtual..."
-    python3 -m venv .venv
-  fi
+  if [ -z "$install_profile" ] && [ -t 0 ] && [ "${SENDERMAN_INSTALLER_NO_MENU:-0}" != "1" ]; then
+  launch_installer_menu
+  exit 0
+fi
 
-  # shellcheck disable=SC1091
-  source .venv/bin/activate
+if [ ! -d .venv ]; then
+  echo "Creando entorno virtual..."
+  python3 -m venv .venv
+fi
 
-  pip install --upgrade pip >/dev/null
-  pip install -r requirements.txt
+# shellcheck disable=SC1091
+source .venv/bin/activate
 
-  if [ -f .env ] && ! $force_overwrite; then
-    echo ".env ya existe; no se sobrescribió."
-  else
-    cp .env.example .env
-    chmod 600 .env
-    echo "Se creó .env desde .env.example con permisos 600."
-  fi
+pip install --upgrade pip >/dev/null
+pip install -r requirements.txt
 
-  current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
-  if [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
-    echo
-    read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
-    if [ -z "$admin_pass" ]; then
-      admin_pass="$(generate_password)"
-      echo "ADMIN_PASS generado automáticamente."
-      echo "Guárdalo ahora: $admin_pass"
-    fi
-    set_env_value "ADMIN_PASS" "$admin_pass"
-  fi
+if [ -f .env ] && ! $force_overwrite; then
+  echo ".env ya existe; no se sobrescribió."
+else
+  cp .env.example .env
+  chmod 600 .env
+  echo "Se creó .env desde .env.example con permisos 600."
+fi
 
+current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
+if [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ]; then
   echo
-  echo "Revisa .env si quieres ajustar ADMIN_USER, FTP_LOG, VSFTPD_CONF o FILES_DIR."
-  if prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?"; then
-    open_config_review
+  read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
+  if [ -z "$admin_pass" ]; then
+    admin_pass="$(generate_password)"
+    echo "ADMIN_PASS generado automáticamente."
+    echo "Guárdalo ahora: $admin_pass"
   fi
-
-  if [ "$install_profile" != "client" ] && $install_service; then
-    if ! command -v sudo >/dev/null 2>&1; then
-      echo "error: sudo no está disponible y se pidió instalar el servicio"
-      exit 1
-    fi
-
-    if [ ! -f senderman-ftp-admin.service ]; then
-      echo "error: no se encontró senderman-ftp-admin.service"
-      exit 1
-    fi
-
-    echo "Instalando servicio systemd..."
-    sudo cp senderman-ftp-admin.service "/etc/systemd/system/$service_name.service"
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now "$service_name"
-  fi
-fi
-
-if [ "$install_profile" != "server" ]; then
-  install_client_tools
-  write_client_config
-  prompt_client_profile
-fi
-
-if [ "$install_profile" != "client" ]; then
-  install_desktop_shortcuts
+  set_env_value "ADMIN_PASS" "$admin_pass"
 fi
 
 echo
+echo "Revisa .env si quieres ajustar ADMIN_USER, FTP_LOG, VSFTPD_CONF o FILES_DIR."
+if prompt_confirm "¿Quieres abrir una pausa para revisar .env ahora?"; then
+  open_config_review
+fi
+
+if $install_service; then
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "error: sudo no está disponible y se pidió instalar el servicio"
+    exit 1
+  fi
+
+  if [ ! -f senderman-ftp-admin.service ]; then
+    echo "error: no se encontró senderman-ftp-admin.service"
+    exit 1
+  fi
+
+  echo "Instalando servicio systemd..."
+  sudo cp senderman-ftp-admin.service "/etc/systemd/system/$service_name.service"
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now "$service_name"
+fi
+
+install_desktop_shortcuts
+
+echo
 echo "Listo. Siguientes pasos:"
-case "$install_profile" in
-  server)
-    echo "1) Verifica .env"
-    if $install_service; then
-      echo "2) Revisa el estado con: sudo systemctl status $service_name"
-      echo "3) Abre http://localhost:8080"
-    else
-      echo "2) Arranca el panel con: nohup .venv/bin/python main.py > panel.log 2>&1 &"
-      echo "3) Abre http://localhost:8080"
-    fi
-    ;;
-  client)
-    echo "1) Ajusta client.env con la IP o dominio remoto"
-    echo "2) Usa: bash tools/client.sh connect"
-    echo "3) Si es FTPS, instala la CA del servidor para evitar el error de certificado"
-    ;;
-  both)
-    echo "1) Verifica .env y client.env"
-    if $install_service; then
-      echo "2) Revisa el estado con: sudo systemctl status $service_name"
-    else
-      echo "2) Arranca el panel con: nohup .venv/bin/python main.py > panel.log 2>&1 &"
-    fi
-    echo "3) Usa: bash tools/client.sh connect"
-    ;;
-esac
+echo "1) Verifica .env"
+if $install_service; then
+  echo "2) Revisa el estado con: sudo systemctl status $service_name"
+  echo "3) Abre http://localhost:8080"
+else
+  echo "2) Arranca el panel con: nohup .venv/bin/python main.py > panel.log 2>&1 &"
+  echo "3) Abre http://localhost:8080"
+fi

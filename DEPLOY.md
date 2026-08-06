@@ -28,9 +28,9 @@ bash install.sh
 
 Al final de la instalación quedan tres accesos en el menú de aplicaciones:
 
-- `Senderman Monitor`: abre la web.
+- `Senderman APP`: abre la web.
 - `Senderman Shell`: abre el terminal de administración del servicio.
-- `Senderman Configuration`: abre `./install.sh` para el menú de actualización, reinstalación y desinstalación.
+- `Senderman Tools`: abre `./install.sh` para el menú de actualización, reinstalación y desinstalación.
 
 ## Configuración
 
@@ -49,14 +49,6 @@ bash tools/update.sh
 
 Ese script instala la release publicada más reciente, o la release publicada que elijas, reinstala dependencias y reinicia el servicio systemd si está disponible.
 
-Si quieres una actualización más segura, usa:
-
-```bash
-bash tools/maintenance.sh
-```
-
-Ese helper crea un respaldo del registro SQLite antes de actualizar y te deja una pista de restauración si algo falla.
-
 ## Publicación
 
 Antes de crear un tag o una GitHub Release, ejecuta:
@@ -64,16 +56,6 @@ Antes de crear un tag o una GitHub Release, ejecuta:
 tu comprobación privada de release.
 
 Si quieres forzar una revisión con cambios locales sin commit, usa la opción equivalente de tu comprobación privada.
-
-## Respaldo del registro
-
-Si necesitas guardar o restaurar el estado de usuarios, usa:
-
-```bash
-bash tools/registry_db.sh backup
-bash tools/registry_db.sh restore backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
-bash tools/registry_db.sh status
-```
 
 ## Arranque manual
 
@@ -121,12 +103,12 @@ Con ese servicio habilitado, `vsftpd` se detendrá como parte del apagado normal
 Si quieres que el panel se inicie solo cuando lo pidas y que Ubuntu te solicite la contraseña del sistema, usa el launcher local:
 
 ```bash
-bash tools/launcher.sh start
+bash tools/app.sh
 ```
 
-Ese comando intenta usar `pkexec` para mostrar el diálogo nativo de autenticación y, cuando autorices, levanta `senderman-ftp-admin` y abre `http://localhost:8080`.
+Ese comando intenta abrir el navegador en pantalla completa con un navegador compatible y, si no lo encuentra, usa el navegador por defecto.
 
-Si prefieres un acceso gráfico, puedes instalar [Senderman Monitor](senderman-ftp-admin.desktop), [Senderman Shell](senderman-ftp-admin-shell.desktop) o [Senderman Configuration](senderman-ftp-admin-menu.desktop) en el escritorio o en el menú de aplicaciones.
+Si prefieres un acceso gráfico, puedes instalar [Senderman APP](senderman-app.desktop), [Senderman Shell](senderman-shell.desktop) o [Senderman Tools](senderman-tools.desktop) en el escritorio o en el menú de aplicaciones.
 
 ## Checklist final
 

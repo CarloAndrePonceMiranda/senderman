@@ -186,19 +186,41 @@
 
           <!-- Tab: archivos -->
           <div id="tab-files" class="d-none">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="small text-secondary">Contenido de <code>senderman/files/</code></span>
-              <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="load-files">
-                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-              </button>
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="files-up">
+                  <i class="bi bi-arrow-up-short me-1"></i>Subir nivel
+                </button>
+                <div id="files-breadcrumb" class="files-breadcrumb small text-secondary"></div>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <input id="files-upload-input" type="file" class="d-none" multiple />
+                <input id="files-folder-input" type="file" class="d-none" multiple webkitdirectory />
+                <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="upload-files">
+                  <i class="bi bi-cloud-arrow-up me-1"></i>Subir
+                </button>
+                <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="upload-folder">
+                  <i class="bi bi-folder-plus me-1"></i>Carpeta
+                </button>
+                <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="load-files">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                </button>
+              </div>
+            </div>
+            <div id="files-dropzone" class="files-dropzone mb-3">
+              <div class="text-center py-4">
+                <i class="bi bi-cloud-arrow-up fs-2 d-block mb-2"></i>
+                <div class="fw-semibold">Arrastra y suelta archivos aquí para subirlos</div>
+                <div class="small text-secondary">O usa el botón Subir para seleccionar uno o varios archivos</div>
+              </div>
             </div>
             <div class="table-responsive">
               <table class="table table-sm mb-0">
                 <thead>
-                  <tr><th>Nombre</th><th>Tamaño</th><th>Modificado</th></tr>
+                  <tr><th>Nombre</th><th>Tamaño</th><th>Modificado</th><th class="text-end">Acciones</th></tr>
                 </thead>
                 <tbody id="files-tbody">
-                  <tr><td colspan="3" class="text-center text-secondary py-4">Cargando...</td></tr>
+                  <tr><td colspan="4" class="text-center text-secondary py-4">Cargando...</td></tr>
                 </tbody>
               </table>
             </div>

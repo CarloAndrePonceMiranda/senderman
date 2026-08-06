@@ -10,17 +10,17 @@ Si solo quieres dejarlo funcionando en Ubuntu, usa la guía corta en [DEPLOY.md]
 Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
-2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres arrancarlo manualmente. Por defecto instala la release publicada más reciente; si quieres otra, usa `--release <release-publicada>` o `--choose-release`.
-3. Durante la instalación puedes elegir `servidor`, `cliente` o `ambos`. El modo cliente prepara herramientas seguras para conectarte a otro servidor por FTPS/SFTP sin tocar la carpeta compartida local.
+2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres abrir el menú interactivo. Por defecto instala la release publicada más reciente; si quieres otra, usa `--release <release-publicada>` o `--choose-release`.
+3. Durante la instalación el instalador prepara únicamente el servidor.
 4. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
 Cuando la instalación termina, el menú de aplicaciones queda dividido en tres accesos:
 
-- `Senderman Monitor`: abre la aplicación web.
+- `Senderman APP`: abre la aplicación web.
 - `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
-- `Senderman Configuration`: abre `./install.sh` para el menú interactivo del instalador.
+- `Senderman Tools`: abre `./install.sh` para el menú interactivo del instalador.
 
 Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
@@ -34,10 +34,8 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
-- `Senderman Monitor`, `Senderman Shell` y `Senderman Configuration` son los tres accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
-- `tools/is.sh` es un alias local para el mismo instalador.
+- `Senderman APP`, `Senderman Shell` y `Senderman Tools` son los tres accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
 - `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
-- `tools/client.sh` abre una conexión segura FTPS o SFTP usando `client.env`.
 
 ## Qué incluye
 
@@ -45,8 +43,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - Registro de usuarios del sistema desde la UI.
 - Bloqueo/desbloqueo y escritura por usuario.
 - Usuarios conectados y actividad en vivo.
-- Explorador de archivos de la carpeta compartida.
-- Modo cliente para conectar de forma segura a un servidor externo sin exponer la carpeta compartida local.
+- Explorador de archivos con navegación por subcarpetas, drag-and-drop y descarga por archivo/carpeta.
 
 ## Estructura del repositorio
 
@@ -55,7 +52,6 @@ ftp-admin/
 ├── main.py
 ├── requirements.txt
 ├── .env.example
-├── client.env.example
 ├── .gitignore
 ├── README.md
 ├── DEPLOY.md
@@ -111,21 +107,17 @@ bash install.sh --release <release-publicada>
 bash install.sh --choose-release
 ```
 
-Si quieres instalar solo el servidor, solo el cliente seguro o ambos:
+Si quieres instalar el servidor:
 
 ```bash
 bash install.sh --server
-bash install.sh --client
-bash install.sh --both
 ```
 
 Al terminar, el menú de aplicaciones muestra tres entradas:
 
-- `Senderman Monitor` para el panel web.
+- `Senderman APP` para el panel web.
 - `Senderman Shell` para el control del servicio desde terminal.
-- `Senderman Configuration` para actualización, reinstalación y desinstalación.
-
-El modo cliente genera `client.env` y deja listo `bash tools/client.sh connect` para abrir una conexión FTPS o SFTP.
+- `Senderman Tools` para actualización, reinstalación y desinstalación.
 
 Si prefieres hacerlo manualmente:
 
@@ -256,22 +248,14 @@ Valores por defecto incluidos en `.env.example`.
 
 Los helpers de operación viven en `tools/`:
 
-- `tools/registry_db.sh`
-- `tools/maintenance.sh`
-- `tools/is.sh`
-- `tools/setup_ubuntu.sh`
 - `tools/update.sh`
-- `tools/update_ubuntu.sh` como compatibilidad
 
 Los archivos de respaldo se guardan en `backups/`, que está ignorado por Git.
 
 Para respaldar o restaurar el registro SQLite:
 
 ```bash
-bash tools/registry_db.sh backup
-bash tools/registry_db.sh restore backups/senderman_registry-YYYYMMDD-HHMMSS.sqlite3
-bash tools/registry_db.sh status
-bash tools/maintenance.sh
+bash tools/update.sh
 ```
 
 ---
@@ -356,12 +340,12 @@ Con eso, Ubuntu ejecutará la detención de `vsftpd` durante el apagado normal d
 Si quieres pedir la contraseña nativa de Ubuntu antes de arrancar el panel, usa el launcher local:
 
 ```bash
-bash tools/launcher.sh start
+bash tools/app.sh
 ```
 
-El launcher intenta abrir el diálogo de `pkexec`, arranca `senderman-ftp-admin` y después abre `http://localhost:8080`.
+El launcher intenta abrir el navegador en pantalla completa si encuentra un navegador compatible y, si no, usa el navegador por defecto.
 
-Si quieres acceso con doble clic, puedes usar [Senderman Monitor](senderman-ftp-admin.desktop), [Senderman Shell](senderman-ftp-admin-shell.desktop) o [Senderman Configuration](senderman-ftp-admin-menu.desktop) como lanzadores gráficos.
+Si quieres acceso con doble clic, puedes usar [Senderman APP](senderman-app.desktop), [Senderman Shell](senderman-shell.desktop) o [Senderman Tools](senderman-tools.desktop) como lanzadores gráficos.
 
 ---
 

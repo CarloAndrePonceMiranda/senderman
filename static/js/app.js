@@ -1,5 +1,7 @@
 let ws = null;
 let autoScroll = true;
+let currentFilesPath = '';
+let currentFilesParentPath = '';
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"]/g, match => ({
@@ -38,8 +40,39 @@ function switchTab(name) {
   });
   document.getElementById(`tab-${name}`).classList.remove('d-none');
   setActiveTab(name);
-  if (name === 'files') loadFiles();
+  if (name === 'files') loadFiles(currentFilesPath);
   if (name === 'users') refreshAll();
+}
+
+function escapeAttr(value) {
+  return escapeHtml(String(value)).replace(/'/g, '&#39;');
+}
+
+function normalizeFilesPath(path) {
+  return String(path || '').replace(/^\/+|\/+$/g, '');
+}
+
+function renderFilesBreadcrumb() {
+  const breadcrumb = document.getElementById('files-breadcrumb');
+  if (!breadcrumb) return;
+
+  const rootButton = `<button class="btn btn-sm btn-link file-link-btn" type="button" data-action="go-root">senderman/files</button>`;
+  if (!currentFilesPath) {
+    breadcrumb.innerHTML = rootButton;
+    return;
+  }
+
+  const segments = currentFilesPath.split('/').filter(Boolean);
+  let runningPath = '';
+  const parts = [rootButton];
+
+  segments.forEach(segment => {
+    runningPath = runningPath ? `${runningPath}/${segment}` : segment;
+    parts.push('<span class="breadcrumb-sep">/</span>');
+    parts.push(`<button class="btn btn-sm btn-link file-link-btn" type="button" data-action="open-folder" data-path="${escapeAttr(runningPath)}">${escapeHtml(segment)}</button>`);
+  });
+
+  breadcrumb.innerHTML = parts.join('');
 }
 
 function colorLine(line) {
@@ -281,37 +314,51 @@ async function registerUser() {
   }
 }
 
-async function loadFiles() {
+async function loadFiles(path = currentFilesPath) {
   const tbody = document.getElementById('files-tbody');
-  tbody.innerHTML = '<tr><td colspan="3" class="text-center text-secondary py-3">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary py-3">Cargando...</td></tr>';
   try {
-    const response = await fetch('/api/files');
+    const normalizedPath = normalizeFilesPath(path);
+    const response = await fetch(`/api/files?path=${encodeURIComponent(normalizedPath)}`);
     if (!response.ok) throw new Error('files');
-    const files = await response.json();
+    const payload = await response.json();
+    const files = payload.entries || [];
+    currentFilesPath = payload.current_path || '';
+    currentFilesParentPath = payload.parent_path || '';
+    renderFilesBreadcrumb();
+
     const fileItems = files.filter(file => !file.is_dir);
     const totalBytes = fileItems.reduce((sum, file) => sum + (file.raw_size || 0), 0);
-    document.getElementById('stat-files').textContent = fileItems.length;
+    document.getElementById('stat-files').textContent = files.length;
 
     if (files.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="text-center text-secondary py-4">Carpeta vacía</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary py-4">Carpeta vacía</td></tr>';
       return;
     }
 
     const rows = files.map(file => {
-      const depth = (file.name.match(/\//g) || []).length;
-      const depthClass = `file-indent-${Math.min(depth, 10)}`;
       const icon = file.is_dir ? 'bi-folder-fill text-warning' : 'bi-file-earmark text-secondary';
-      const shortName = file.name.includes('/') ? file.name.split('/').pop() : file.name;
-      const labelBadge = depth === 0 && file.is_dir ? `<span class="badge badge-off ms-1 small">${escapeHtml(file.name)}</span>` : '';
+      const itemPath = file.path || file.name;
+      const shortName = file.name || itemPath;
+      const labelBadge = file.is_dir ? '<span class="badge badge-off ms-1 small">Carpeta</span>' : '';
+      const downloadLabel = file.is_dir ? 'Descargar carpeta' : 'Descargar archivo';
 
       return `<tr>
-        <td class="file-tree-cell ${depthClass}">
+        <td class="file-tree-cell file-indent-0">
           <i class="bi ${icon} file-icon"></i>
-          <span title="${escapeHtml(file.name)}">${escapeHtml(shortName)}</span>
+          ${file.is_dir ? `<button class="file-link-btn fw-semibold" type="button" data-action="open-folder" data-path="${escapeAttr(itemPath)}" title="Abrir carpeta">${escapeHtml(shortName)}</button>` : `<span title="${escapeHtml(itemPath)}">${escapeHtml(shortName)}</span>`}
           ${labelBadge}
         </td>
         <td class="text-secondary small">${escapeHtml(file.size)}</td>
         <td class="text-secondary small">${escapeHtml(file.modified)}</td>
+        <td class="text-end">
+          <div class="file-actions">
+            ${file.is_dir ? `<button class="btn btn-sm btn-outline-secondary btn-action file-action-btn" type="button" data-action="open-folder" data-path="${escapeAttr(itemPath)}" title="Abrir carpeta"><i class="bi bi-box-arrow-in-right"></i></button>` : ''}
+            <button class="btn btn-sm btn-outline-secondary btn-action file-action-btn" type="button" data-action="download-file" data-path="${escapeAttr(file.name)}" title="${downloadLabel}">
+              <i class="bi bi-download"></i>
+            </button>
+          </div>
+        </td>
       </tr>`;
     }).join('');
 
@@ -319,12 +366,126 @@ async function loadFiles() {
       <td class="text-secondary small"><i class="bi bi-hdd me-1"></i>Total</td>
       <td class="text-info small fw-semibold">${formatBytes(totalBytes)}</td>
       <td></td>
+      <td></td>
     </tr>`;
 
     tbody.innerHTML = rows + totalRow;
   } catch (error) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Error al cargar archivos</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Error al cargar archivos</td></tr>';
   }
+}
+
+async function downloadFile(path) {
+  try {
+    const response = await fetch(`/api/files/download?path=${encodeURIComponent(path)}`);
+    if (!response.ok) throw new Error('download');
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('content-disposition') || '';
+    const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+    const filename = match ? match[1] : path.split('/').pop();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    toast('No se pudo descargar el archivo', 'danger');
+  }
+}
+
+async function uploadItems(items) {
+  if (!items || items.length === 0) {
+    toast('Selecciona al menos un archivo', 'danger');
+    return;
+  }
+
+  const formData = new FormData();
+  items.forEach(item => {
+    formData.append('files', item.file, normalizeFilesPath(item.path || item.file.webkitRelativePath || item.file.name));
+  });
+
+  try {
+    const response = await fetch(`/api/files/upload?path=${encodeURIComponent(currentFilesPath)}`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'upload');
+    }
+    toast('Archivos cargados correctamente', 'success');
+    loadFiles(currentFilesPath);
+  } catch (error) {
+    toast(error.message || 'No se pudieron subir los archivos', 'danger');
+  }
+}
+
+function readAllDirectoryEntries(reader) {
+  return new Promise(resolve => {
+    const entries = [];
+
+    const readBatch = () => {
+      reader.readEntries(batch => {
+        if (!batch.length) {
+          resolve(entries);
+          return;
+        }
+        entries.push(...batch);
+        readBatch();
+      }, () => resolve(entries));
+    };
+
+    readBatch();
+  });
+}
+
+async function getFilesFromEntry(entry) {
+  if (entry.isFile) {
+    return new Promise(resolve => {
+      entry.file(file => {
+        resolve([{ file, path: normalizeFilesPath(entry.fullPath || file.webkitRelativePath || file.name) }]);
+      });
+    });
+  }
+
+  if (!entry.isDirectory) {
+    return Promise.resolve([]);
+  }
+
+  const children = await readAllDirectoryEntries(entry.createReader());
+  const nested = await Promise.all(children.map(child => getFilesFromEntry(child)));
+  return nested.flat();
+}
+
+async function collectDroppedItems(dataTransfer) {
+  const items = dataTransfer?.items;
+  if (items && items.length && items[0].webkitGetAsEntry) {
+    const all = [];
+    for (const item of Array.from(items)) {
+      const entry = item.webkitGetAsEntry();
+      if (entry) {
+        const files = await getFilesFromEntry(entry);
+        all.push(...files);
+      }
+    }
+    return all;
+  }
+
+  return Array.from(dataTransfer?.files || []).map(file => ({
+    file,
+    path: normalizeFilesPath(file.webkitRelativePath || file.name),
+  }));
+}
+
+async function uploadFiles(fileList) {
+  const items = Array.from(fileList || []).map(file => ({
+    file,
+    path: normalizeFilesPath(file.webkitRelativePath || file.name),
+  }));
+  return uploadItems(items);
 }
 
 function formatBytes(bytes) {
@@ -358,6 +519,18 @@ function bindUI() {
     button.addEventListener('click', loadFiles);
   });
 
+  document.querySelectorAll('[data-action="upload-files"]').forEach(button => {
+    button.addEventListener('click', () => {
+      document.getElementById('files-upload-input')?.click();
+    });
+  });
+
+  document.querySelectorAll('[data-action="upload-folder"]').forEach(button => {
+    button.addEventListener('click', () => {
+      document.getElementById('files-folder-input')?.click();
+    });
+  });
+
   document.querySelectorAll('[data-action="register-user"]').forEach(button => {
     button.addEventListener('click', registerUser);
   });
@@ -381,6 +554,76 @@ function bindUI() {
       } else if (writeState) {
         userWriteAction(username, writeState);
       }
+    });
+  }
+
+  document.addEventListener('click', event => {
+    const openButton = event.target.closest('button[data-action="open-folder"]');
+    if (openButton) {
+      const nextPath = normalizeFilesPath(openButton.dataset.path || '');
+      loadFiles(nextPath);
+      return;
+    }
+
+    const downloadButton = event.target.closest('button[data-action="download-file"]');
+    if (downloadButton) {
+      downloadFile(downloadButton.dataset.path || '');
+      return;
+    }
+
+    const filesUpButton = event.target.closest('button[data-action="files-up"]');
+    if (filesUpButton) {
+      loadFiles(currentFilesParentPath || '');
+      return;
+    }
+
+    const rootButton = event.target.closest('button[data-action="go-root"]');
+    if (rootButton) {
+      loadFiles('');
+    }
+  });
+
+  const uploadInput = document.getElementById('files-upload-input');
+  if (uploadInput) {
+    uploadInput.addEventListener('change', event => {
+      const input = event.target;
+      uploadFiles(input.files);
+      input.value = '';
+    });
+  }
+
+  const folderInput = document.getElementById('files-folder-input');
+  if (folderInput) {
+    folderInput.addEventListener('change', event => {
+      const input = event.target;
+      uploadFiles(input.files);
+      input.value = '';
+    });
+  }
+
+  const dropzone = document.getElementById('files-dropzone');
+  if (dropzone) {
+    const prevent = event => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    ['dragenter', 'dragover'].forEach(type => {
+      dropzone.addEventListener(type, event => {
+        prevent(event);
+        dropzone.classList.add('is-dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(type => {
+      dropzone.addEventListener(type, event => {
+        prevent(event);
+        dropzone.classList.remove('is-dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', event => {
+      collectDroppedItems(event.dataTransfer).then(items => uploadItems(items));
     });
   }
 }

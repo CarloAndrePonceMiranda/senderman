@@ -92,10 +92,16 @@ pause_shell() {
   read -r -p "Pulsa Enter para continuar..." _
 }
 
+shell_header() {
+  printf '\033[36m====================================================================\033[0m\n'
+  printf '\033[1;32mSenderman vsftp\033[0m\n'
+  printf '\033[36m====================================================================\033[0m\n'
+}
+
 shell_menu() {
   while true; do
     echo
-    echo "== Senderman Shell =="
+    shell_header
     echo "1) Iniciar servicio"
     echo "2) Detener servicio"
     echo "3) Reiniciar servicio"

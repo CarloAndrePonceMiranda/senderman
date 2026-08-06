@@ -493,3 +493,68 @@ body[data-theme='light'] .status-pill i {
 body[data-theme='light'] .files-total-row td {
   border-top-color: rgba(12,18,28,.15);
 }
+
+.files-dropzone {
+  border: 1px dashed rgba(88,166,255,.42);
+  border-radius: 18px;
+  background: rgba(88,166,255,.05);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.files-dropzone.is-dragover {
+  border-color: #58a6ff;
+  background: rgba(88,166,255,.12);
+  transform: translateY(-1px);
+}
+
+body[data-theme='light'] .files-dropzone {
+  border-color: rgba(37,99,235,.30);
+  background: rgba(37,99,235,.05);
+}
+
+body[data-theme='light'] .files-dropzone.is-dragover {
+  background: rgba(37,99,235,.12);
+}
+
+.file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  justify-content: flex-end;
+}
+
+.file-action-btn {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-link-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.file-link-btn:hover {
+  color: #58a6ff;
+}
+
+.files-breadcrumb {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+}
+
+.files-breadcrumb .breadcrumb-sep {
+  color: #6c757d;
+}
+
+body[data-theme='light'] .file-link-btn:hover {
+  color: #2563eb;
+}

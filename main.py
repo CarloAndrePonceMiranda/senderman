@@ -1,18 +1,22 @@
 import asyncio
+import mimetypes
 import json
 import os
 import re
 import secrets
 import subprocess
 import sqlite3
+import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from starlette.background import BackgroundTask
 
 
 def load_local_env() -> None:
@@ -70,6 +74,25 @@ def format_bytes(size: int) -> str:
             return f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} TB"
+
+
+def _safe_files_path(relative_path: str) -> Path:
+    base = Path(FILES_DIR).resolve()
+    safe_relative = relative_path.strip().replace("\\", "/")
+    if Path(safe_relative).is_absolute():
+        raise HTTPException(status_code=400, detail="Ruta de archivo inválida")
+
+    candidate = (base / safe_relative).resolve()
+    if candidate == base or base in candidate.parents:
+        return candidate
+    raise HTTPException(status_code=400, detail="Ruta de archivo inválida")
+
+
+def _normalize_upload_relative_path(filename: str) -> Path:
+    parts = [part for part in filename.replace("\\", "/").split("/") if part and part != "."]
+    if not parts or any(part == ".." for part in parts):
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+    return Path(*parts)
 
 
 def get_service_status() -> dict:
@@ -496,21 +519,89 @@ async def api_user_action(username: str, action: str, _: str = Depends(verify)):
 
 
 @app.get("/api/files")
-async def api_files(_: str = Depends(verify)):
+async def api_files(path: str = "", _: str = Depends(verify)):
     try:
-        base = Path(FILES_DIR)
-        files = []
-        for f in sorted(base.rglob("*"), key=lambda p: (p.is_file(), str(p).lower())):
-            st = f.stat()
-            rel = str(f.relative_to(base))
-            files.append({
-                "name":     rel,
-                "size":     format_bytes(st.st_size) if f.is_file() else "—",
-                "raw_size": st.st_size if f.is_file() else 0,
-                "is_dir":   f.is_dir(),
+        base = Path(FILES_DIR).resolve()
+        base.mkdir(parents=True, exist_ok=True)
+        current_dir = _safe_files_path(path)
+        if not current_dir.exists() or not current_dir.is_dir():
+            raise HTTPException(status_code=404, detail="La carpeta no existe")
+
+        entries = []
+        for item in sorted(current_dir.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            st = item.stat()
+            rel = str(item.relative_to(base))
+            entries.append({
+                "path": rel,
+                "name": item.name,
+                "size": format_bytes(st.st_size) if item.is_file() else "—",
+                "raw_size": st.st_size if item.is_file() else 0,
+                "is_dir": item.is_dir(),
                 "modified": datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y %H:%M"),
             })
-        return files
+
+        current_rel = "" if current_dir == base else str(current_dir.relative_to(base))
+        parent_rel = "" if current_dir == base else ("" if current_dir.parent == base else str(current_dir.parent.relative_to(base)))
+
+        return {
+            "current_path": current_rel,
+            "parent_path": parent_rel,
+            "entries": entries,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/files/download")
+async def api_files_download(path: str, _: str = Depends(verify)):
+    try:
+        target = _safe_files_path(path)
+        if not target.exists():
+            raise HTTPException(status_code=404, detail="El archivo no existe")
+
+        if target.is_dir():
+            temp_zip = Path(tempfile.NamedTemporaryFile(prefix="senderman-files-", suffix=".zip", delete=False).name)
+            temp_zip.unlink(missing_ok=True)
+            zip_path = shutil.make_archive(str(temp_zip.with_suffix("")), "zip", root_dir=str(target.parent), base_dir=target.name)
+            return FileResponse(
+                zip_path,
+                filename=f"{target.name}.zip",
+                media_type="application/zip",
+                background=BackgroundTask(Path(zip_path).unlink, missing_ok=True),
+            )
+
+        media_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        return FileResponse(target, filename=target.name, media_type=media_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/files/upload")
+async def api_files_upload(path: str = "", files: list[UploadFile] = File(...), _: str = Depends(verify)):
+    try:
+        base = Path(FILES_DIR).resolve()
+        base.mkdir(parents=True, exist_ok=True)
+        target_dir = _safe_files_path(path)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        uploaded: list[str] = []
+
+        for file in files:
+            relative_path = _normalize_upload_relative_path(file.filename)
+            destination = (target_dir / relative_path).resolve()
+            if base not in destination.parents and destination != base:
+                raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("wb") as handle:
+                handle.write(await file.read())
+            uploaded.append(str(destination.relative_to(base)))
+
+        return {"ok": True, "uploaded": uploaded}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
