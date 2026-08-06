@@ -132,6 +132,14 @@ menu_prompt() {
   printf '%s' "$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
 }
 
+invalid_menu_feedback() {
+  printf '\033[41m\033[97m\033[2J\033[H'
+  printf '\n  Ingresa un comando válido\n\n'
+  printf '  Presiona Enter para continuar...'
+  read -r _
+  printf '\033[0m'
+}
+
 run_installer_command() {
   env SENDERMAN_INSTALLER_NO_MENU=1 bash "$repo_root/install.sh" "$@"
 }
@@ -218,8 +226,7 @@ launch_installer_menu() {
           exit 0
           ;;
         *)
-          echo "Opción inválida."
-          sleep 1
+          invalid_menu_feedback
           ;;
       esac
     else
@@ -237,8 +244,7 @@ launch_installer_menu() {
           exit 0
           ;;
         *)
-          echo "Opción inválida."
-          sleep 1
+          invalid_menu_feedback
           ;;
       esac
     fi
@@ -338,45 +344,78 @@ prompt_install_profile() {
 }
 
 install_app_icon() {
-  local icons_dir
-  icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+  local icons_root
+  local scalable_icons_dir
+  local raster_icons_dir
 
-  mkdir -p "$icons_dir"
-  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/senderman-ftp-admin.svg"
+  icons_root="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+  scalable_icons_dir="$icons_root/scalable/apps"
+  raster_icons_dir="$icons_root/256x256/apps"
 
-  cat > "$icons_dir/senderman-app.svg" <<'EOF'
+  mkdir -p "$scalable_icons_dir" "$raster_icons_dir"
+  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/senderman-ftp-admin.svg"
+  rm -f "$raster_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-shell.svg" "$raster_icons_dir/senderman-tools.svg" "$raster_icons_dir/senderman-monitor.svg" "$raster_icons_dir/senderman-configuration.svg" "$raster_icons_dir/senderman-ftp-admin.png" "$raster_icons_dir/senderman-ftp-admin.svg"
+
+  cat > "$scalable_icons_dir/senderman-app.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman APP">
-  <rect width="256" height="256" rx="44" fill="#0b1220"/>
-  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#00ff66" stroke-width="8"/>
-  <rect x="46" y="50" width="164" height="132" rx="14" fill="#0f172a" stroke="#374151" stroke-width="4"/>
-  <path d="M60 150h136" fill="none" stroke="#00ff66" stroke-width="10" stroke-linecap="round"/>
-  <path d="M74 122h108" fill="none" stroke="#00d9ff" stroke-width="8" stroke-linecap="round"/>
-  <path d="M92 94h72" fill="none" stroke="#00ff66" stroke-width="8" stroke-linecap="round"/>
-  <rect x="96" y="208" width="64" height="14" rx="7" fill="#94a3b8"/>
+  <defs>
+    <linearGradient id="appGlow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00ff66" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#00d9ff" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="44" fill="#04110d"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#071814" stroke="#00ff66" stroke-width="8"/>
+  <rect x="44" y="50" width="168" height="132" rx="14" fill="#06130f" stroke="#123b2f" stroke-width="4"/>
+  <path d="M58 66h140" fill="none" stroke="#0b3d2b" stroke-width="4" stroke-linecap="round"/>
+  <path d="M72 64v108M94 58v114M116 70v102M138 60v112M160 66v106M182 60v112" fill="none" stroke="url(#appGlow)" stroke-width="8" stroke-linecap="round" opacity="0.92"/>
+  <path d="M54 142h148" fill="none" stroke="#00ff66" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+  <path d="M66 118h124" fill="none" stroke="#00d9ff" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+  <rect x="86" y="208" width="84" height="14" rx="7" fill="#00ff66" opacity="0.85"/>
 </svg>
 EOF
 
-  cat > "$icons_dir/senderman-shell.svg" <<'EOF'
+  cat > "$scalable_icons_dir/senderman-shell.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Shell">
-  <rect width="256" height="256" rx="44" fill="#0b1220"/>
-  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#00d9ff" stroke-width="8"/>
-  <rect x="48" y="50" width="160" height="132" rx="14" fill="#0a0f18" stroke="#1f2937" stroke-width="4"/>
-  <path d="M68 90l28 26-28 26" fill="none" stroke="#00d9ff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M112 142h44" fill="none" stroke="#e5e7eb" stroke-width="10" stroke-linecap="round"/>
-  <rect x="94" y="208" width="68" height="14" rx="7" fill="#94a3b8"/>
+  <defs>
+    <linearGradient id="shellGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00d9ff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#00ff66" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="44" fill="#04110d"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#071814" stroke="#00d9ff" stroke-width="8"/>
+  <rect x="48" y="50" width="160" height="132" rx="14" fill="#05110e" stroke="#123b2f" stroke-width="4"/>
+  <path d="M64 84h128" fill="none" stroke="#0b3d2b" stroke-width="4" stroke-linecap="round"/>
+  <path d="M66 98l28 26-28 26" fill="none" stroke="url(#shellGlow)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M116 148h42" fill="none" stroke="#00ff66" stroke-width="10" stroke-linecap="round"/>
+  <path d="M116 128h58" fill="none" stroke="#00d9ff" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
+  <rect x="90" y="208" width="76" height="14" rx="7" fill="#00d9ff" opacity="0.85"/>
 </svg>
 EOF
 
-  cat > "$icons_dir/senderman-tools.svg" <<'EOF'
+  cat > "$scalable_icons_dir/senderman-tools.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman Tools">
-  <rect width="256" height="256" rx="44" fill="#0b1220"/>
-  <rect x="24" y="28" width="208" height="176" rx="28" fill="#111827" stroke="#00ff66" stroke-width="8"/>
-  <circle cx="128" cy="116" r="34" fill="#00ff66"/>
-  <circle cx="128" cy="116" r="18" fill="#111827"/>
+  <defs>
+    <linearGradient id="toolsGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00ff66" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#00d9ff" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="44" fill="#04110d"/>
+  <rect x="24" y="28" width="208" height="176" rx="28" fill="#071814" stroke="#00ff66" stroke-width="8"/>
+  <circle cx="128" cy="116" r="36" fill="#00ff66" opacity="0.16"/>
+  <circle cx="128" cy="116" r="30" fill="none" stroke="url(#toolsGlow)" stroke-width="12"/>
+  <circle cx="128" cy="116" r="14" fill="#05110e" stroke="#00d9ff" stroke-width="6"/>
   <path d="M128 66v18M128 148v18M78 116h18M160 116h18M92 80l12 12M152 140l12 12M164 80l-12 12M104 140l-12 12" stroke="#00d9ff" stroke-width="10" stroke-linecap="round"/>
-  <rect x="92" y="208" width="72" height="14" rx="7" fill="#94a3b8"/>
+  <path d="M58 70h140" fill="none" stroke="#0b3d2b" stroke-width="4" stroke-linecap="round"/>
+  <rect x="88" y="208" width="80" height="14" rx="7" fill="#00ff66" opacity="0.85"/>
 </svg>
 EOF
+
+  cp "$scalable_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-app.svg"
+  cp "$scalable_icons_dir/senderman-shell.svg" "$raster_icons_dir/senderman-shell.svg"
+  cp "$scalable_icons_dir/senderman-tools.svg" "$raster_icons_dir/senderman-tools.svg"
 }
 
 install_desktop_shortcuts() {
@@ -434,11 +473,14 @@ EOF
 remove_desktop_shortcuts() {
   local applications_dir
   local icons_dir
+  local scalable_icons_dir
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+  scalable_icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 
   rm -f "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
   rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
+  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/sftp-matrix.svg"
 }
 
 uninstall_application() {
