@@ -16,6 +16,12 @@ Resumen rápido:
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
+Cuando la instalación termina, el menú de aplicaciones queda dividido en tres accesos:
+
+- `Senderman Monitor`: abre la aplicación web.
+- `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
+- `Senderman Configuration`: abre el menú interactivo para actualizar, reinstalar o desinstalar.
+
 Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
 
@@ -28,6 +34,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
+- `Senderman Monitor`, `Senderman Shell` y `Senderman Configuration` son los tres accesos que instala el script en el menú de aplicaciones.
 - `tools/is.sh` es un alias local para el mismo instalador.
 - `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
 - `tools/client.sh` abre una conexión segura FTPS o SFTP usando `client.env`.
@@ -111,6 +118,12 @@ bash install.sh --server
 bash install.sh --client
 bash install.sh --both
 ```
+
+Al terminar, el menú de aplicaciones muestra tres entradas:
+
+- `Senderman Monitor` para el panel web.
+- `Senderman Shell` para el control del servicio desde terminal.
+- `Senderman Configuration` para actualización, reinstalación y desinstalación.
 
 El modo cliente genera `client.env` y deja listo `bash tools/client.sh connect` para abrir una conexión FTPS o SFTP.
 

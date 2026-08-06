@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=SFTP Shell
+Name=Senderman Configuration
 Comment=Abre el menú interactivo de instalación y mantenimiento
 Exec=/usr/bin/bash /home/mr-robot/ftp-admin/tools/menu.sh
 TryExec=/usr/bin/bash

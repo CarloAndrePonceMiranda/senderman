@@ -283,10 +283,10 @@ install_desktop_shortcuts() {
   mkdir -p "$applications_dir"
   install_app_icon
 
-  cat > "$applications_dir/senderman-ftp-admin.desktop" <<EOF
+  cat > "$applications_dir/senderman-ftp-admin-monitor.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=SFTP Monitor
+Name=Senderman Monitor
 Comment=Abre el panel web de administración
 Exec=/usr/bin/bash $repo_root/tools/launcher.sh start
 TryExec=/usr/bin/bash
@@ -296,10 +296,23 @@ Categories=Network;System;
 StartupNotify=true
 EOF
 
-  cat > "$applications_dir/senderman-ftp-admin-menu.desktop" <<EOF
+  cat > "$applications_dir/senderman-ftp-admin-shell.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=SFTP Shell
+Name=Senderman Shell
+Comment=Abre el terminal de administración del servicio
+Exec=/usr/bin/bash $repo_root/tools/shell.sh
+TryExec=/usr/bin/bash
+Icon=senderman-ftp-admin
+Terminal=true
+Categories=Network;System;Utility;
+StartupNotify=true
+EOF
+
+  cat > "$applications_dir/senderman-ftp-admin-configuration.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Senderman Configuration
 Comment=Abre el menú interactivo de instalación y mantenimiento
 Exec=/usr/bin/bash $repo_root/tools/menu.sh
 TryExec=/usr/bin/bash
@@ -309,7 +322,7 @@ Categories=Network;System;Utility;
 StartupNotify=true
 EOF
 
-  chmod 644 "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
+  chmod 644 "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop"
   echo "Se instalaron los accesos directos en $applications_dir."
 }
 
@@ -319,7 +332,7 @@ remove_desktop_shortcuts() {
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 
-  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop"
+  rm -f "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop"
   rm -f "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png"
 }
 

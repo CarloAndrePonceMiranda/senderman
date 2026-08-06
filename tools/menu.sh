@@ -8,6 +8,17 @@ cd "$repo_root"
 selected_release_args=()
 selected_service_args=()
 
+normalize_choice() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+
+read_choice() {
+  local prompt="$1"
+  local reply
+  read -r -p "$prompt" reply
+  normalize_choice "$reply"
+}
+
 pause_menu() {
   echo
   read -r -p "Pulsa Enter para volver al menú..." _
@@ -69,18 +80,18 @@ choose_release_args() {
     echo "2) Elegir entre releases publicadas"
     echo "3) Escribir un tag concreto"
     echo "0) Volver"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe latest, choose, tag o volver: ")"
 
     case "$choice" in
-      1)
+      1|latest|latest-release|recent|reciente)
         selected_release_args=(--latest-release)
         return 0
         ;;
-      2)
+      2|choose|selector|elegir)
         selected_release_args=(--choose-release)
         return 0
         ;;
-      3)
+      3|tag|release)
         read -r -p "Tag de la release: " tag
         if [ -z "$tag" ]; then
           echo "No se indicó ningún tag."
@@ -89,7 +100,7 @@ choose_release_args() {
         selected_release_args=(--release "$tag")
         return 0
         ;;
-      0)
+      0|volver|salir|exit)
         return 1
         ;;
       *)
@@ -106,8 +117,8 @@ choose_service_args_for_install() {
     return 0
   fi
 
-  read -r -p "¿Instalar como servicio systemd? [y/N]: " reply
-  if [[ "$reply" =~ ^[Yy]$ ]]; then
+  choice="$(read_choice "¿Instalar como servicio systemd? [si/no]: ")"
+  if [[ "$choice" =~ ^(si|s|y|yes)$ ]]; then
     selected_service_args=(--service)
   fi
 }
@@ -134,19 +145,19 @@ install_flow() {
     echo "2) Cliente"
     echo "3) Ambos"
     echo "0) Volver"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe servidor, cliente, ambos o volver: ")"
 
     case "$choice" in
-      1)
+      1|server|servidor)
         profile="server"
         ;;
-      2)
+      2|client|cliente)
         profile="client"
         ;;
-      3)
+      3|both|ambos)
         profile="both"
         ;;
-      0)
+      0|volver|salir|exit)
         return 0
         ;;
       *)
@@ -169,7 +180,7 @@ install_flow() {
       echo "La instalación falló."
     fi
     pause_menu
-    return 0
+    exit 0
   done
 }
 
@@ -184,16 +195,16 @@ update_flow() {
     echo "2) Elegir entre releases publicadas"
     echo "3) Escribir un tag concreto"
     echo "0) Volver"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe actualizar, latest, choose, tag o volver: ")"
 
     case "$choice" in
-      1)
+      1|latest|actualizar|update)
         selected_release_args=(--latest-release)
         ;;
-      2)
+      2|choose|elegir)
         selected_release_args=(--choose-release)
         ;;
-      3)
+      3|tag)
         read -r -p "Tag de la release: " tag
         if [ -z "$tag" ]; then
           echo "No se indicó ningún tag."
@@ -201,7 +212,7 @@ update_flow() {
         fi
         selected_release_args=(--release "$tag")
         ;;
-      0)
+      0|volver|salir|exit)
         return 0
         ;;
       *)
@@ -220,7 +231,7 @@ update_flow() {
       echo "La actualización falló."
     fi
     pause_menu
-    return 0
+    exit 0
   done
 }
 
@@ -242,23 +253,23 @@ reinstall_flow() {
     echo "3) Elegir entre releases publicadas"
     echo "4) Escribir un tag concreto"
     echo "0) Volver"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe actual, latest, choose, tag o volver: ")"
 
     case "$choice" in
-      1)
+      1|actual|actualizar|current|current-release)
         if [ -z "$release_tag" ]; then
           echo "No hay una release marcada en .senderman-release."
           continue
         fi
         selected_release_args=(--release "$release_tag")
         ;;
-      2)
+      2|latest|reciente)
         selected_release_args=(--latest-release)
         ;;
-      3)
+      3|choose|elegir)
         selected_release_args=(--choose-release)
         ;;
-      4)
+      4|tag)
         read -r -p "Tag de la release: " tag
         if [ -z "$tag" ]; then
           echo "No se indicó ningún tag."
@@ -266,7 +277,7 @@ reinstall_flow() {
         fi
         selected_release_args=(--release "$tag")
         ;;
-      0)
+      0|volver|salir|exit)
         return 0
         ;;
       *)
@@ -285,7 +296,7 @@ reinstall_flow() {
       echo "La reinstalación falló."
     fi
     pause_menu
-    return 0
+    exit 0
   done
 }
 
@@ -296,10 +307,10 @@ uninstall_flow() {
     echo "1) Desinstalación completa"
     echo "2) Desinstalar pero mantener configuración"
     echo "0) Volver"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe completa, conservar o volver: ")"
 
     case "$choice" in
-      1)
+      1|completa|full|total)
         if run_installer --uninstall; then
           echo
           echo "Desinstalación completada."
@@ -308,9 +319,9 @@ uninstall_flow() {
           echo "La desinstalación falló."
         fi
         pause_menu
-        return 0
+        exit 0
         ;;
-      2)
+      2|conservar|keep|config)
         if run_installer --uninstall --keep-config; then
           echo
           echo "Desinstalación completada y configuración conservada."
@@ -319,9 +330,9 @@ uninstall_flow() {
           echo "La desinstalación falló."
         fi
         pause_menu
-        return 0
+        exit 0
         ;;
-      0)
+      0|volver|salir|exit)
         return 0
         ;;
       *)
@@ -340,19 +351,19 @@ installed_menu() {
     echo "2) Reinstalar"
     echo "3) Desinstalar"
     echo "0) Salir"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe actualizar, reinstalar, desinstalar o salir: ")"
 
     case "$choice" in
-      1)
+      1|actualizar|update)
         update_flow
         ;;
-      2)
+      2|reinstalar|install|reinstall)
         reinstall_flow
         ;;
-      3)
+      3|desinstalar|uninstall|remove)
         uninstall_flow
         ;;
-      0)
+      0|salir|exit|volver)
         exit 0
         ;;
       *)
@@ -369,13 +380,13 @@ not_installed_menu() {
     echo "Estado: no instalado"
     echo "1) Instalar"
     echo "0) Salir"
-    read -r -p "Opción: " choice
+    choice="$(read_choice "Escribe instalar o salir: ")"
 
     case "$choice" in
-      1)
+      1|instalar|install)
         install_flow
         ;;
-      0)
+      0|salir|exit|volver)
         exit 0
         ;;
       *)

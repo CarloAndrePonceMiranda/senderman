@@ -26,6 +26,12 @@ Si prefieres instalar sin habilitar el servicio aún:
 bash install.sh
 ```
 
+Al final de la instalación quedan tres accesos en el menú de aplicaciones:
+
+- `Senderman Monitor`: abre la web.
+- `Senderman Shell`: abre el terminal de administración del servicio.
+- `Senderman Configuration`: abre el menú de actualización, reinstalación y desinstalación.
+
 ## Configuración
 
 `install.sh` crea `.env` con permisos 600 si no existe y te pide revisar `ADMIN_PASS` antes de continuar.
