@@ -418,7 +418,7 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         username,
     ])
     if code != 0:
-        raise HTTPException(status_code=500, detail=err)
+        raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
     proc = subprocess.run(
         ["sudo", CHPASSWD_BIN],
