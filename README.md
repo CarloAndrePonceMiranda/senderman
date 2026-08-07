@@ -37,6 +37,17 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `Senderman APP`, `Senderman Shell` y `Senderman Tools` son los tres accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
 - `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
 
+## Flujo de ramas y tags
+
+El repositorio ya asume un flujo de integración con GitHub Actions para releases:
+
+- `feature/*` o PRs con `feat:` generan un tag de tipo minor al integrarse.
+- `bugfix/*` o PRs con `fix:` generan un tag de tipo patch al integrarse.
+- `hotfix/*` o PRs con `hotfix:` generan un tag de tipo major al integrarse.
+- Los bugfix integrados en `master` intentan abrir una PR de cascada hacia `develop` si esa rama existe.
+
+Si quieres forzar el tipo de release de forma manual, usa el workflow `Release management` desde GitHub Actions.
+
 ## Qué incluye
 
 - Estado del servicio y control de `vsftpd`.
