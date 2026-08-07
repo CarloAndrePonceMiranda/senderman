@@ -352,16 +352,18 @@ def get_connected_users() -> list[dict]:
 
 def get_user_locked(username: str) -> bool:
     try:
-        _, shadow_out, _ = run(["sudo", "getent", "shadow", username])
+        rc, shadow_out, _ = run(["sudo", "getent", "shadow", username])
+        if rc != 0:
+            return True
         if shadow_out:
             fields = shadow_out.split(":", 2)
             if len(fields) >= 2:
                 password_field = fields[1]
                 return password_field.startswith("!") or password_field.startswith("*")
     except Exception:
-        pass
+        return True
 
-    return False
+    return True
 
 
 # ── Rutas HTTP ─────────────────────────────────────────────────────────────────
