@@ -16,20 +16,20 @@ read_choice() {
 }
 
 open_installer_menu() {
-  exec bash "$repo_root/install.sh"
+  exec bash "$repo_root/install.sh" "$@"
 }
 
 open_sftp_admin_menu() {
-  exec bash "$repo_root/tools/shell.sh"
+  exec bash "$repo_root/tools/shell.sh" "$@"
 }
 
 if [ $# -gt 0 ]; then
   case "$(normalize_choice "$1")" in
     installer)
-      open_installer_menu
+      open_installer_menu "${@:2}"
       ;;
     sftpadmin|sftp-admin|sftp)
-      open_sftp_admin_menu
+      open_sftp_admin_menu "${@:2}"
       ;;
     *)
       exec bash "$repo_root/install.sh" "$@"
