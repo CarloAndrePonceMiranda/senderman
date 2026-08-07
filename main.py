@@ -108,12 +108,18 @@ def get_write_enabled() -> bool:
         return False
 
 
-def _default_user_record(username: str) -> dict:
+def _default_user_record(
+    username: str,
+    *,
+    locked: bool | None = None,
+    write_enabled: bool | None = None,
+    protocol: str = "SFTP",
+) -> dict:
     return {
         "username": username,
-        "locked": get_user_locked(username),
-        "write_enabled": get_write_enabled(),
-        "protocol": "SFTP",
+        "locked": get_user_locked(username) if locked is None else locked,
+        "write_enabled": get_write_enabled() if write_enabled is None else write_enabled,
+        "protocol": protocol,
     }
 
 
@@ -256,7 +262,7 @@ def _update_user_registry(username: str, updater) -> list[dict]:
             "SELECT username, locked, write_enabled, protocol FROM user_registry WHERE username = ?",
             (username,),
         ).fetchone()
-        current = _row_to_user(row) if row is not None else _default_user_record(username)
+        current = _row_to_user(row) if row is not None else _default_user_record(username, write_enabled=False)
         updated = updater(current)
         _upsert_user_record(conn, updated)
         conn.commit()
@@ -346,18 +352,18 @@ def get_connected_users() -> list[dict]:
 
 def get_user_locked(username: str) -> bool:
     try:
-        _, shadow_out, _ = run(["sudo", "getent", "shadow", username])
+        rc, shadow_out, _ = run(["sudo", "getent", "shadow", username])
+        if rc != 0:
+            return True
         if shadow_out:
             fields = shadow_out.split(":", 2)
             if len(fields) >= 2:
                 password_field = fields[1]
                 return password_field.startswith("!") or password_field.startswith("*")
     except Exception:
-        pass
+        return True
 
-    _, out, _ = run(["passwd", "-S", username])
-    parts = out.split()
-    return len(parts) >= 2 and parts[1].startswith("L")
+    return True
 
 
 # ── Rutas HTTP ─────────────────────────────────────────────────────────────────
