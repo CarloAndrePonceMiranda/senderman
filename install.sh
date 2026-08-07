@@ -439,25 +439,40 @@ install_desktop_shortcuts() {
   local applications_dir
   local icons_root
   local app_icon_path
+  local menu_icon_path
   local shell_icon_path
   local tools_icon_path
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   icons_root="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
   app_icon_path="$icons_root/senderman-app.svg"
+  menu_icon_path="$icons_root/senderman-tools.svg"
   shell_icon_path="$icons_root/senderman-shell.svg"
   tools_icon_path="$icons_root/senderman-tools.svg"
 
   mkdir -p "$applications_dir"
   install_app_icon
 
-  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-menu.desktop" "$applications_dir/sftp-menu.desktop"
+
+  cat > "$applications_dir/senderman-menu.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Senderman Desktop
+Comment=Abre el menú principal: Installer y SFTP Admin
+Exec=/usr/bin/bash -lc 'if command -v gnome-terminal >/dev/null 2>&1; then gnome-terminal --full-screen -- bash "$repo_root/tools/menu.sh"; elif command -v konsole >/dev/null 2>&1; then konsole --fullscreen -e bash "$repo_root/tools/menu.sh"; elif command -v xterm >/dev/null 2>&1; then xterm -fullscreen -e bash "$repo_root/tools/menu.sh"; else bash "$repo_root/tools/menu.sh"; fi'
+TryExec=/usr/bin/bash
+Icon=$menu_icon_path
+Terminal=true
+Categories=Network;System;Utility;
+StartupNotify=true
+EOF
 
   cat > "$applications_dir/senderman-app.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Senderman APP
 Comment=Abre la aplicación web de Senderman
-Exec=/usr/bin/bash $repo_root/tools/app.sh
+Exec=/usr/bin/bash "$repo_root/tools/app.sh"
 TryExec=/usr/bin/bash
 Icon=$app_icon_path
 Terminal=false
@@ -491,7 +506,7 @@ Categories=Network;System;Utility;
 StartupNotify=true
 EOF
 
-  chmod 644 "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop"
+  chmod 644 "$applications_dir/senderman-menu.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop"
   echo "Se instalaron los accesos directos en $applications_dir."
 }
 
@@ -503,7 +518,7 @@ remove_desktop_shortcuts() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
   scalable_icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 
-  rm -f "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$applications_dir/senderman-menu.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
   rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
   rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/sftp-matrix.svg"
 }
