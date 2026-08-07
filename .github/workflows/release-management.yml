@@ -1,11 +1,9 @@
 name: Release management
 
 on:
-  pull_request:
+  push:
     branches:
       - master
-    types:
-      - closed
   workflow_dispatch:
     inputs:
       release_kind:
@@ -28,17 +26,13 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: release-management-${{ github.event.pull_request.number || github.run_id }}
+  group: release-management-${{ github.sha || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   tag-and-cascade:
     runs-on: ubuntu-latest
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
-      }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
 
     steps:
       - name: Checkout repository
@@ -55,8 +49,8 @@ jobs:
           set -euo pipefail
 
           release_kind="${{ inputs.release_kind || 'auto' }}"
-          source_ref="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          source_title="${{ github.event.pull_request.title || github.ref_name }}"
+          source_ref="${{ github.ref_name }}"
+          source_title="${{ github.event.head_commit.message || github.ref_name }}"
 
           if [[ "$release_kind" == "auto" ]]; then
             if [[ "$source_ref" == hotfix/* || "$source_title" == hotfix:* ]]; then
