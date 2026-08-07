@@ -16,7 +16,9 @@ Resumen rápido:
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Cuando la instalación termina, el menú de aplicaciones queda dividido en tres accesos:
+Cuando la instalación termina, el menú de aplicaciones incluye un acceso principal y tres accesos directos:
+
+- `Senderman Desktop`: abre el menú principal con dos submenús: `installer` (Instalador de programa) y `sftpadmin` (Administrador de servicio SFTP).
 
 - `Senderman APP`: abre la aplicación web y, si el panel no está arriba, la levanta antes de abrir el navegador.
 - `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
@@ -130,7 +132,9 @@ Si quieres instalar el servidor:
 bash install.sh --server
 ```
 
-Al terminar, el menú de aplicaciones muestra tres entradas:
+Al terminar, el menú de aplicaciones muestra cuatro entradas:
+
+- `Senderman Desktop` para abrir `installer` o `sftpadmin`.
 
 - `Senderman APP` para el panel web.
 - `Senderman Shell` para el control del servicio desde terminal.

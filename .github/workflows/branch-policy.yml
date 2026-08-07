@@ -30,8 +30,8 @@ jobs:
           elif [[ "$head_ref" == hotfix/* ]]; then
             expected_base="master"
           else
-            expected_base="develop"
-            echo "warning: legacy branch name detected for $head_ref; allowing develop as the target"
+            echo "error: unsupported branch prefix for PR head: $head_ref"
+            exit 1
           fi
 
           if [[ "$base_ref" != "$expected_base" ]]; then
