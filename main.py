@@ -108,12 +108,18 @@ def get_write_enabled() -> bool:
         return False
 
 
-def _default_user_record(username: str) -> dict:
+def _default_user_record(
+    username: str,
+    *,
+    locked: bool | None = None,
+    write_enabled: bool | None = None,
+    protocol: str = "SFTP",
+) -> dict:
     return {
         "username": username,
-        "locked": get_user_locked(username),
-        "write_enabled": get_write_enabled(),
-        "protocol": "SFTP",
+        "locked": get_user_locked(username) if locked is None else locked,
+        "write_enabled": get_write_enabled() if write_enabled is None else write_enabled,
+        "protocol": protocol,
     }
 
 
@@ -256,7 +262,7 @@ def _update_user_registry(username: str, updater) -> list[dict]:
             "SELECT username, locked, write_enabled, protocol FROM user_registry WHERE username = ?",
             (username,),
         ).fetchone()
-        current = _row_to_user(row) if row is not None else _default_user_record(username)
+        current = _row_to_user(row) if row is not None else _default_user_record(username, locked=False, write_enabled=False)
         updated = updater(current)
         _upsert_user_record(conn, updated)
         conn.commit()
@@ -355,9 +361,7 @@ def get_user_locked(username: str) -> bool:
     except Exception:
         pass
 
-    _, out, _ = run(["passwd", "-S", username])
-    parts = out.split()
-    return len(parts) >= 2 and parts[1].startswith("L")
+    return False
 
 
 # ── Rutas HTTP ─────────────────────────────────────────────────────────────────
@@ -410,7 +414,8 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         username,
     ])
     if code != 0:
-        raise HTTPException(status_code=500, detail=err)
+        detail = err or "No se pudo crear el usuario en el sistema"
+        raise HTTPException(status_code=500, detail=f"No se pudo crear el usuario: {detail}")
 
     proc = subprocess.run(
         ["sudo", "chpasswd"],
@@ -419,9 +424,10 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         capture_output=True,
     )
     if proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=proc.stderr.strip() or "No se pudo establecer la contraseña")
+        detail = proc.stderr.strip() or "No se pudo establecer la contraseña"
+        raise HTTPException(status_code=500, detail=f"No se pudo establecer la contraseña: {detail}")
 
-    users.append(_default_user_record(username))
+    users.append(_default_user_record(username, locked=False, write_enabled=False))
     _save_user_registry(users)
     return {"ok": True, "user": username}
 
@@ -444,7 +450,7 @@ async def api_register_user(request: Request, _: str = Depends(verify)):
     if not _user_exists(username):
         raise HTTPException(status_code=404, detail="El usuario no existe en el sistema")
 
-    users.append(_default_user_record(username))
+    users.append(_default_user_record(username, locked=False, write_enabled=False))
     _save_user_registry(users)
     return {"ok": True, "user": username}
 
