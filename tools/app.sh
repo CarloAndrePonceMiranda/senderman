@@ -38,6 +38,8 @@ start_panel_if_needed() {
   done
 }
 
+start_panel_if_needed
+
 open_browser() {
   local browser
 
@@ -59,7 +61,6 @@ open_browser() {
   fi
 
   echo "error: no se encontró un navegador compatible" >&2
-start_panel_if_needed
   exit 1
 }
 

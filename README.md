@@ -18,9 +18,9 @@ Resumen rápido:
 
 Cuando la instalación termina, el menú de aplicaciones queda dividido en tres accesos:
 
-- `Senderman APP`: abre la aplicación web.
+- `Senderman APP`: abre la aplicación web y, si el panel no está arriba, la levanta antes de abrir el navegador.
 - `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
-- `Senderman Tools`: abre `./install.sh` para el menú interactivo del instalador.
+- `Senderman Tools`: abre `./install.sh` para instalación, actualización, reinstalación y ajustes de configuración.
 
 Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
@@ -337,13 +337,13 @@ Con eso, Ubuntu ejecutará la detención de `vsftpd` durante el apagado normal d
 
 ## Launcher bajo demanda
 
-Si quieres pedir la contraseña nativa de Ubuntu antes de arrancar el panel, usa el launcher local:
+Si quieres abrir el panel manualmente sin depender del acceso gráfico, usa el launcher local:
 
 ```bash
 bash tools/app.sh
 ```
 
-El launcher intenta abrir el navegador en pantalla completa si encuentra un navegador compatible y, si no, usa el navegador por defecto.
+El launcher intenta abrir el navegador en pantalla completa si encuentra uno compatible y, si el panel no está activo, lo inicia antes de abrir la web.
 
 Si quieres acceso con doble clic, puedes usar [Senderman APP](senderman-app.desktop), [Senderman Shell](senderman-shell.desktop) o [Senderman Tools](senderman-tools.desktop) como lanzadores gráficos.
 
