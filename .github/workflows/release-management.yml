@@ -51,9 +51,19 @@ jobs:
           release_kind="${{ inputs.release_kind || 'auto' }}"
           source_ref="${{ github.ref_name }}"
           source_title="${{ github.event.head_commit.message || github.ref_name }}"
+          source_branch=""
 
           if [[ "$release_kind" == "auto" ]]; then
-            if [[ "$source_ref" == hotfix/* || "$source_title" == hotfix:* ]]; then
+            if [[ "$source_title" =~ [[:space:]]from[[:space:]].*/(hotfix|hotfixes)/[^[:space:]]+ ]]; then
+              release_kind="hotfix"
+              source_branch="${BASH_REMATCH[1]}"
+            elif [[ "$source_title" =~ [[:space:]]from[[:space:]].*/(feature|feat)/[^[:space:]]+ ]]; then
+              release_kind="feature"
+              source_branch="${BASH_REMATCH[1]}"
+            elif [[ "$source_title" =~ [[:space:]]from[[:space:]].*/(bugfix|fix)/[^[:space:]]+ ]]; then
+              release_kind="bugfix"
+              source_branch="${BASH_REMATCH[1]}"
+            elif [[ "$source_ref" == hotfix/* || "$source_title" == hotfix:* ]]; then
               release_kind="hotfix"
             elif [[ "$source_ref" == feature/* || "$source_ref" == feat/* || "$source_title" == feat:* ]]; then
               release_kind="feature"
@@ -66,6 +76,7 @@ jobs:
 
           echo "release_kind=$release_kind" >> "$GITHUB_OUTPUT"
           echo "source_ref=$source_ref" >> "$GITHUB_OUTPUT"
+          echo "source_branch=$source_branch" >> "$GITHUB_OUTPUT"
 
       - name: Calculate next tag
         id: tag
@@ -93,9 +104,7 @@ jobs:
             minor=$((minor + 1))
             patch=0
           elif [[ "$release_kind" == "hotfix" ]]; then
-            major=$((major + 1))
-            minor=0
-            patch=0
+            patch=$((patch + 1))
           else
             patch=$((patch + 1))
           fi
@@ -119,8 +128,8 @@ jobs:
           git tag -a "$tag_name" -m "Release $tag_name"
           git push origin "$tag_name"
 
-      - name: Create cascade PR for bugfix merges
-        if: steps.release_kind.outputs.release_kind == 'bugfix'
+      - name: Create cascade PR for hotfix merges
+        if: steps.release_kind.outputs.release_kind == 'hotfix'
         uses: actions/github-script@v7
         env:
           CASCADE_TARGET_BRANCH: ${{ inputs.cascade_target_branch || 'develop' }}
@@ -157,9 +166,9 @@ jobs:
               repo,
               head: headBranch,
               base: baseBranch,
-              title: 'chore: cascade bugfix changes to develop',
+              title: 'chore: cascade hotfix changes to develop',
               body: [
-                'Se creó esta PR de cascada después de integrar un bugfix en master.',
+                'Se creó esta PR de cascada después de integrar un hotfix en master.',
                 '',
                 'Revisa el estado antes de volver a liberar.',
               ].join('\n'),

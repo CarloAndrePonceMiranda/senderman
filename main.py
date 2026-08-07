@@ -70,6 +70,16 @@ def run(cmd: list[str]) -> tuple[int, str, str]:
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
+def run_sudo(cmd: list[str], sudo_password: str) -> tuple[int, str, str]:
+    r = subprocess.run(
+        ["sudo", "-S", "-p", ""] + cmd,
+        input=f"{sudo_password}\n",
+        capture_output=True,
+        text=True,
+    )
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
+
+
 def format_bytes(size: int) -> str:
     for unit in ["B", "KB", "MB", "GB"]:
         if size < 1024:
@@ -411,18 +421,18 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
     if _user_exists(username):
         raise HTTPException(status_code=409, detail="El usuario ya existe en el sistema")
 
-    code, _, err = run([
-        "sudo", USERADD_BIN,
+    code, _, err = run_sudo([
+        USERADD_BIN,
         "-m",
         "-s", "/usr/sbin/nologin",
         username,
-    ])
+    ], ADMIN_PASS)
     if code != 0:
         raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
     proc = subprocess.run(
-        ["sudo", CHPASSWD_BIN],
-        input=f"{username}:{password}\n",
+        ["sudo", "-S", "-p", "", CHPASSWD_BIN],
+        input=f"{ADMIN_PASS}\n{username}:{password}\n",
         text=True,
         capture_output=True,
     )
