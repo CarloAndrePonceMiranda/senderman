@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
 service_name="senderman-ftp-admin"
+service_user="mr-robot"
 install_service=false
 force_overwrite=false
 release_mode="latest"
@@ -130,6 +131,17 @@ current_release_tag() {
   fi
 }
 
+installed_release_label() {
+  local release_tag
+  release_tag="$(current_release_tag || true)"
+
+  if [ -n "$release_tag" ]; then
+    printf 'Estado: instalado · %s' "$release_tag"
+  else
+    printf 'Estado: instalado'
+  fi
+}
+
 menu_header() {
   local title="$1"
   local subtitle="${2:-}"
@@ -186,7 +198,7 @@ launch_installer_menu() {
   while true; do
     clear || true
     if is_installed; then
-      menu_header "Senderman installer" "Estado: instalado"
+      menu_header "Senderman installer" "$(installed_release_label)"
       echo "reinstall - Reinstalar"
       echo "update - Actualizar"
       echo "logs - Ver logs"
@@ -493,6 +505,36 @@ EOF
 
   chmod 644 "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-tools.desktop"
   echo "Se instalaron los accesos directos en $applications_dir."
+}
+
+install_sudoers_rules() {
+  local sudoers_file="/etc/sudoers.d/ftp-admin"
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Aviso: sudo no está disponible; no se pudieron instalar las reglas sudoers."
+    return 0
+  fi
+
+  cat <<EOF | sudo tee "$sudoers_file" >/dev/null
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vsftpd
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vsftpd
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vsftpd
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -L jesus12jimmy13
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -U jesus12jimmy13
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/getent shadow jesus12jimmy13
+$service_user ALL=(ALL) NOPASSWD: /usr/sbin/useradd -m -s /usr/sbin/nologin
+$service_user ALL=(ALL) NOPASSWD: /usr/sbin/chpasswd
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/vsftpd.conf
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 50 -f /var/log/vsftpd.log
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 500 /var/log/vsftpd.log
+EOF
+  sudo chmod 440 "$sudoers_file"
+
+  if command -v visudo >/dev/null 2>&1; then
+    sudo visudo -cf "$sudoers_file" >/dev/null
+  fi
+
+  echo "Se instalaron las reglas sudoers en $sudoers_file."
 }
 
 remove_desktop_shortcuts() {
@@ -990,6 +1032,8 @@ if $install_service; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now "$service_name"
 fi
+
+install_sudoers_rules
 
 install_desktop_shortcuts
 
