@@ -262,7 +262,7 @@ def _update_user_registry(username: str, updater) -> list[dict]:
             "SELECT username, locked, write_enabled, protocol FROM user_registry WHERE username = ?",
             (username,),
         ).fetchone()
-        current = _row_to_user(row) if row is not None else _default_user_record(username, locked=False, write_enabled=False)
+        current = _row_to_user(row) if row is not None else _default_user_record(username, write_enabled=False)
         updated = updater(current)
         _upsert_user_record(conn, updated)
         conn.commit()
@@ -427,7 +427,7 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         detail = proc.stderr.strip() or "No se pudo establecer la contraseña"
         raise HTTPException(status_code=500, detail=f"No se pudo establecer la contraseña: {detail}")
 
-    users.append(_default_user_record(username, locked=False, write_enabled=False))
+    users.append(_default_user_record(username, write_enabled=False))
     _save_user_registry(users)
     return {"ok": True, "user": username}
 
@@ -450,7 +450,7 @@ async def api_register_user(request: Request, _: str = Depends(verify)):
     if not _user_exists(username):
         raise HTTPException(status_code=404, detail="El usuario no existe en el sistema")
 
-    users.append(_default_user_record(username, locked=False, write_enabled=False))
+    users.append(_default_user_record(username, write_enabled=False))
     _save_user_registry(users)
     return {"ok": True, "user": username}
 
