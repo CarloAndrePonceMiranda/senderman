@@ -69,6 +69,8 @@ if ! command -v pip3 >/dev/null 2>&1; then
 	exit 1
 fi
 
+git fetch --tags origin >/dev/null 2>&1 || true
+
 get_repo_slug() {
 	local remote_url
 	remote_url="$(git remote get-url origin 2>/dev/null || true)"
@@ -514,7 +516,11 @@ PY
 }
 
 repo_slug="$(get_repo_slug)"
-release_info="$(resolve_release_info "$release_mode" "$release_selector")"
+if release_info="$(select_tag_info "$repo_slug" "$release_mode" "$release_selector" 2>/dev/null)"; then
+	:
+else
+	release_info="$(resolve_release_info "$release_mode" "$release_selector")"
+fi
 IFS='|' read -r release_tag release_tarball_url release_name <<<"$release_info"
 current_release_tag="$(cat .senderman-release 2>/dev/null || true)"
 
