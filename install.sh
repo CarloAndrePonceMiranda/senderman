@@ -496,6 +496,31 @@ EOF
   echo "Se instalaron los accesos directos en $applications_dir."
 }
 
+install_console_launchers() {
+  local bin_dir="/usr/local/bin"
+  local senderman_sftp_launcher="$bin_dir/senderman-sftp"
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Aviso: sudo no está disponible; no se pudieron instalar los launchers de consola."
+    return 0
+  fi
+
+  cat <<EOF | sudo tee "$senderman_sftp_launcher" >/dev/null
+#!/usr/bin/env bash
+exec bash "$repo_root/tools/shell.sh"
+EOF
+  sudo chmod 755 "$senderman_sftp_launcher"
+  echo "Se instaló el launcher de consola en $bin_dir/senderman-sftp."
+}
+
+remove_console_launchers() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    return 0
+  fi
+
+  sudo rm -f /usr/local/bin/senderman-sftp
+}
+
 install_sudoers_rules() {
   local sudoers_file="/etc/sudoers.d/ftp-admin"
 
@@ -542,6 +567,7 @@ remove_desktop_shortcuts() {
 uninstall_application() {
   echo "== Desinstalación de Senderman FTP Admin =="
 
+  remove_console_launchers
   remove_desktop_shortcuts
 
   if command -v sudo >/dev/null 2>&1; then
@@ -582,6 +608,85 @@ get_repo_slug() {
       exit 1
       ;;
   esac
+}
+
+resolve_tag_info() {
+  local mode="$1"
+  local selector="$2"
+
+  python3 - "$mode" "$selector" <<'PY'
+from __future__ import annotations
+
+import subprocess
+import sys
+
+mode, selector = sys.argv[1:3]
+
+
+def repo_slug() -> str:
+  remote_url = subprocess.run(
+    ["git", "remote", "get-url", "origin"],
+    check=True,
+    text=True,
+    capture_output=True,
+  ).stdout.strip()
+
+  prefixes = {
+    "https://github.com/": "",
+    "http://github.com/": "",
+    "git@github.com:": "",
+  }
+  for prefix in prefixes:
+    if remote_url.startswith(prefix):
+      slug = remote_url[len(prefix) :]
+      return slug[:-4] if slug.endswith(".git") else slug
+  raise SystemExit(f"error: no se pudo resolver el repositorio GitHub desde origin: {remote_url}")
+
+
+def git_tags() -> list[str]:
+  result = subprocess.run(["git", "tag", "--sort=-creatordate"], check=True, text=True, capture_output=True)
+  return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def tag_line(tag: str) -> str:
+  return f"{tag}|https://github.com/{repo_slug()}/archive/refs/tags/{tag}.tar.gz|{tag}"
+
+
+tags = git_tags()
+if not tags:
+  raise SystemExit(1)
+
+if mode == "latest":
+  print(tag_line(tags[0]))
+elif mode == "exact":
+  if selector not in tags:
+    raise SystemExit(1)
+  print(tag_line(selector))
+elif mode == "choose":
+  print("Tags locales disponibles:")
+  for index, tag in enumerate(tags, start=1):
+    print(f"{index}) {tag}")
+
+  if not sys.stdin.isatty():
+    raise SystemExit(1)
+
+  while True:
+    choice = input("Elige un tag por número o nombre: ").strip()
+    if not choice:
+      continue
+    if choice.isdigit():
+      selected_index = int(choice) - 1
+      if 0 <= selected_index < len(tags):
+        print(tag_line(tags[selected_index]))
+        raise SystemExit(0)
+      continue
+
+    if choice in tags:
+      print(tag_line(choice))
+      raise SystemExit(0)
+else:
+  raise SystemExit(1)
+PY
 }
 
 resolve_release_info() {
@@ -940,7 +1045,11 @@ fi
 
 if [ "${SENDERMAN_INSTALLER_SKIP_BOOTSTRAP:-0}" != "1" ]; then
   repo_slug="$(get_repo_slug)"
-  release_info="$(resolve_release_info "$release_mode" "$release_selector")"
+  if release_info="$(resolve_tag_info "$release_mode" "$release_selector" 2>/dev/null)"; then
+    :
+  else
+    release_info="$(resolve_release_info "$release_mode" "$release_selector")"
+  fi
   IFS='|' read -r release_tag release_tarball_url release_name <<<"$release_info"
 
   echo "Instalando desde la release publicada: $release_tag"
@@ -1030,6 +1139,7 @@ fi
 install_sudoers_rules
 
 install_desktop_shortcuts
+install_console_launchers
 
 echo
 echo "Listo. Siguientes pasos:"

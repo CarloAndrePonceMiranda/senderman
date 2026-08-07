@@ -10,7 +10,7 @@ Si solo quieres dejarlo funcionando en Ubuntu, usa la guía corta en [DEPLOY.md]
 Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
-2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres abrir el menú interactivo. Por defecto instala la release publicada más reciente; si quieres otra, usa `--release <release-publicada>` o `--choose-release`.
+2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres abrir el menú interactivo. Por defecto instala el tag más reciente; si quieres otra versión, usa `--release <tag>` o `--choose-release`.
 3. Durante la instalación el instalador prepara únicamente el servidor.
 4. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
@@ -22,7 +22,9 @@ Cuando la instalación termina, el menú de aplicaciones queda dividido en tres 
 - `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
 - `Senderman Tools`: abre `./install.sh` para instalación, actualización, reinstalación y ajustes de configuración.
 
-Si después publicas cambios, usa `bash tools/update.sh` para traerlos y reinstalar dependencias.
+Además, el instalador deja disponible el comando `senderman-sftp` en consola para abrir ese mismo menú de SFTP/servicio desde terminal.
+
+Si después publicas cambios, usa `bash tools/update.sh` para traer el tag más reciente y reinstalar dependencias.
 Antes de publicar una versión, ejecuta tu comprobación privada de release para validar que el árbol está listo.
 
 ## Checklist de entrega
@@ -35,16 +37,20 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
 - `Senderman APP`, `Senderman Shell` y `Senderman Tools` son los tres accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
-- `tools/update.sh` instala la release publicada más reciente y permite elegir otra release publicada.
+- `tools/update.sh` instala el tag más reciente y permite elegir otro tag publicado.
 
 ## Flujo de ramas y tags
 
 El repositorio ya asume un flujo de integración con GitHub Actions para releases:
 
-- `feature/*` o PRs con `feat:` generan un tag de tipo minor al integrarse.
-- `bugfix/*` o PRs con `fix:` generan un tag de tipo patch al integrarse.
-- `hotfix/*` o PRs con `hotfix:` generan un tag de tipo major al integrarse.
-- Los bugfix integrados en `master` intentan abrir una PR de cascada hacia `develop` si esa rama existe.
+- `feature/*` y `bugfix/*` se integran en `develop`.
+- `hotfix/*` se integra en `master`.
+- `hotfix/*` genera un tag de tipo patch al integrarse.
+- `develop` se promueve a `master` cuando hay una release lista.
+- Cada hotfix integrado en `master` intenta abrir una PR de cascada hacia `develop` si esa rama existe.
+- Las ramas `feature/*` y `bugfix/*` se borran automáticamente después del merge.
+
+GitHub debe mantener protegidas `master` y `develop`, y el flujo de PR debe respetar la dirección de cada tipo de rama.
 
 Si quieres forzar el tipo de release de forma manual, usa el workflow `Release management` desde GitHub Actions.
 
@@ -157,7 +163,7 @@ cp .env.example .env
 
 2. Edita `.env` y ajusta, como mínimo, `ADMIN_PASS`.
 
-3. `install.sh` crea `/etc/sudoers.d/ftp-admin` y deja la contraseña de instalación asociada al usuario del servicio para los comandos privilegiados. Si cambias las rutas por defecto, revisa también ese archivo.
+3. `install.sh` crea `/etc/sudoers.d/ftp-admin` y deja la contraseña de instalación asociada al usuario del servicio para los comandos privilegiados. El panel usa esa contraseña automáticamente para las altas de usuario, así que no hace falta volver a pedirla en el formulario.
 
 Variables disponibles:
 

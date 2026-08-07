@@ -409,14 +409,11 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
 
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", "")).strip()
-    sudo_password = str(payload.get("sudo_password", ""))
 
     if not username or not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", username):
         raise HTTPException(status_code=400, detail="Nombre de usuario inválido")
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
-    if not sudo_password:
-        raise HTTPException(status_code=400, detail="La contraseña de instalación es obligatoria")
 
     users = get_user_registry()
     if any(user["username"] == username for user in users):
@@ -429,13 +426,13 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         "-m",
         "-s", "/usr/sbin/nologin",
         username,
-    ], sudo_password)
+    ], ADMIN_PASS)
     if code != 0:
         raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
     proc = subprocess.run(
         ["sudo", "-S", "-p", "", CHPASSWD_BIN],
-        input=f"{sudo_password}\n{username}:{password}\n",
+        input=f"{ADMIN_PASS}\n{username}:{password}\n",
         text=True,
         capture_output=True,
     )

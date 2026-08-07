@@ -18,7 +18,7 @@ cd ftp-admin
 bash install.sh --service
 ```
 
-`install.sh` instala por defecto la release publicada más reciente. Si necesitas otra versión publicada, usa `bash install.sh --release <release-publicada>` o `bash install.sh --choose-release`.
+`install.sh` instala por defecto el tag más reciente. Si necesitas otra versión, usa `bash install.sh --release <tag>` o `bash install.sh --choose-release`.
 
 Si prefieres instalar sin habilitar el servicio aún:
 
@@ -47,7 +47,15 @@ Cuando publiques cambios nuevos en GitHub, ejecuta:
 bash tools/update.sh
 ```
 
-Ese script instala la release publicada más reciente, o la release publicada que elijas, reinstala dependencias y reinicia el servicio systemd si está disponible.
+Ese script instala el tag más reciente, o el tag que elijas, reinstala dependencias y reinicia el servicio systemd si está disponible.
+
+## Flujo de ramas
+
+- `feature/*` y `bugfix/*` van a `develop`.
+- `hotfix/*` va a `master`.
+- `hotfix/*` publica patch tags.
+- `master` vuelve a `develop` después de un hotfix.
+- Las ramas `feature/*` y `bugfix/*` se eliminan después del merge.
 
 ## Publicación
 
