@@ -47,7 +47,6 @@ USER_REGISTRY_DB = Path(__file__).parent / "senderman_registry.sqlite3"
 LEGACY_USER_REGISTRY_FILE = Path(__file__).parent / "users.json"
 USERADD_BIN = "/usr/sbin/useradd"
 CHPASSWD_BIN = "/usr/sbin/chpasswd"
-SUDO = ["sudo", "-n"]
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Senderman FTP Admin")
@@ -68,6 +67,16 @@ def verify(credentials: HTTPBasicCredentials = Depends(security)) -> str:
 def run(cmd: list[str]) -> tuple[int, str, str]:
     r = subprocess.run(cmd, capture_output=True, text=True,
                        stdin=subprocess.DEVNULL)
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
+
+
+def run_sudo(cmd: list[str], sudo_password: str) -> tuple[int, str, str]:
+    r = subprocess.run(
+        ["sudo", "-S", "-p", ""] + cmd,
+        input=f"{sudo_password}\n",
+        capture_output=True,
+        text=True,
+    )
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
@@ -285,7 +294,7 @@ def _active_peer_ips(port: int) -> set[str]:
 
 def _tail_log(path: str, lines: int = 500) -> list[str]:
     """Lee las últimas líneas de un log protegido con sudo."""
-    _, out, _ = run([*SUDO, "tail", "-n", str(lines), path])
+    _, out, _ = run(["sudo", "tail", "-n", str(lines), path])
     return out.splitlines()
 
 
@@ -355,7 +364,7 @@ def get_connected_users() -> list[dict]:
 
 def get_user_locked(username: str) -> bool:
     try:
-        rc, shadow_out, _ = run([*SUDO, "getent", "shadow", username])
+        rc, shadow_out, _ = run(["sudo", "getent", "shadow", username])
         if rc != 0:
             return True
         if shadow_out:
@@ -400,11 +409,14 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
 
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", "")).strip()
+    sudo_password = str(payload.get("sudo_password", ""))
 
     if not username or not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", username):
         raise HTTPException(status_code=400, detail="Nombre de usuario inválido")
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+    if not sudo_password:
+        raise HTTPException(status_code=400, detail="La contraseña de instalación es obligatoria")
 
     users = get_user_registry()
     if any(user["username"] == username for user in users):
@@ -412,18 +424,18 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
     if _user_exists(username):
         raise HTTPException(status_code=409, detail="El usuario ya existe en el sistema")
 
-    code, _, err = run([
-        *SUDO, USERADD_BIN,
+    code, _, err = run_sudo([
+        USERADD_BIN,
         "-m",
         "-s", "/usr/sbin/nologin",
         username,
-    ])
+    ], sudo_password)
     if code != 0:
         raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
     proc = subprocess.run(
-        [*SUDO, CHPASSWD_BIN],
-        input=f"{username}:{password}\n",
+        ["sudo", "-S", "-p", "", CHPASSWD_BIN],
+        input=f"{sudo_password}\n{username}:{password}\n",
         text=True,
         capture_output=True,
     )
@@ -462,7 +474,7 @@ async def api_register_user(request: Request, _: str = Depends(verify)):
 async def api_service(action: str, _: str = Depends(verify)):
     if action not in ("start", "stop", "restart"):
         raise HTTPException(status_code=400, detail="Acción inválida")
-    code, _, err = run([*SUDO, "systemctl", action, "vsftpd"])
+    code, _, err = run(["sudo", "systemctl", action, "vsftpd"])
     if code != 0:
         raise HTTPException(status_code=500, detail=err)
     return {"ok": True, "action": action}
@@ -492,11 +504,11 @@ async def api_user_write(username: str, state: str, _: str = Depends(verify)):
                 new_conf = re.sub(r'write_enable=\w+', 'write_enable=YES', conf)
             else:
                 new_conf = re.sub(r'write_enable=\w+', 'write_enable=NO', conf)
-            proc = subprocess.run([*SUDO, "tee", VSFTPD_CONF],
+            proc = subprocess.run(["sudo", "tee", VSFTPD_CONF],
                                   input=new_conf.encode(), capture_output=True)
             if proc.returncode != 0:
                 raise Exception(proc.stderr.decode())
-            run([*SUDO, "systemctl", "restart", "vsftpd"])
+            run(["sudo", "systemctl", "restart", "vsftpd"])
 
         return {"ok": True, "username": username, "write_enabled": desired}
     except Exception as e:
@@ -513,7 +525,7 @@ async def api_user_action(username: str, action: str, _: str = Depends(verify)):
     if action not in ("lock", "unlock"):
         raise HTTPException(status_code=400)
     flag = "-L" if action == "lock" else "-U"
-    code, _, err = run([*SUDO, "usermod", flag, username])
+    code, _, err = run(["sudo", "usermod", flag, username])
     if code != 0:
         raise HTTPException(status_code=500, detail=err)
 
@@ -621,7 +633,7 @@ async def ws_logs(ws: WebSocket):
     await ws.accept()
     try:
         proc = await asyncio.create_subprocess_exec(
-            *SUDO, "/usr/local/bin/senderman-log-stream",
+            "sudo", "/usr/local/bin/senderman-log-stream",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )

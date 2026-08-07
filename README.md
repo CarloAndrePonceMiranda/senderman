@@ -157,7 +157,7 @@ cp .env.example .env
 
 2. Edita `.env` y ajusta, como mínimo, `ADMIN_PASS`.
 
-3. `install.sh` crea `/etc/sudoers.d/ftp-admin` con las reglas necesarias. Si cambias las rutas por defecto o el usuario del servicio, revisa también ese archivo.
+3. `install.sh` crea `/etc/sudoers.d/ftp-admin` y deja la contraseña de instalación asociada al usuario del servicio para los comandos privilegiados. Si cambias las rutas por defecto, revisa también ese archivo.
 
 Variables disponibles:
 

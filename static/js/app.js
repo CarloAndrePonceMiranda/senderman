@@ -279,10 +279,12 @@ function openRegisterModal() {
 async function registerUser() {
   const input = document.getElementById('new-user-name');
   const passwordInput = document.getElementById('new-user-pass');
+  const sudoPasswordInput = document.getElementById('new-user-sudo-pass');
   const modalElement = document.getElementById('register-user-modal');
   const modal = bootstrap.Modal.getInstance(modalElement);
   const username = input.value.trim();
   const password = passwordInput.value;
+  const sudoPassword = sudoPasswordInput.value;
 
   if (!username) {
     toast('Escribe un nombre de usuario', 'danger');
@@ -292,16 +294,21 @@ async function registerUser() {
     toast('La contraseña debe tener al menos 8 caracteres', 'danger');
     return;
   }
+  if (!sudoPassword) {
+    toast('Escribe la contraseña de instalación', 'danger');
+    return;
+  }
 
   try {
     const response = await fetch('/api/users/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, sudo_password: sudoPassword }),
     });
     if (response.ok) {
       input.value = '';
       passwordInput.value = '';
+      sudoPasswordInput.value = '';
       toast('Usuario registrado en el panel', 'success');
       if (modal) modal.hide();
       refreshAll();

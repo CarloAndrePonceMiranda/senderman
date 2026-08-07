@@ -131,17 +131,6 @@ current_release_tag() {
   fi
 }
 
-installed_release_label() {
-  local release_tag
-  release_tag="$(current_release_tag || true)"
-
-  if [ -n "$release_tag" ]; then
-    printf 'Estado: instalado · %s' "$release_tag"
-  else
-    printf 'Estado: instalado'
-  fi
-}
-
 menu_header() {
   local title="$1"
   local subtitle="${2:-}"
@@ -198,7 +187,7 @@ launch_installer_menu() {
   while true; do
     clear || true
     if is_installed; then
-      menu_header "Senderman installer" "$(installed_release_label)"
+      menu_header "Senderman installer" "Estado: instalado"
       echo "reinstall - Reinstalar"
       echo "update - Actualizar"
       echo "logs - Ver logs"
@@ -522,8 +511,8 @@ $service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vsftpd
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -L jesus12jimmy13
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -U jesus12jimmy13
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/getent shadow jesus12jimmy13
-$service_user ALL=(ALL) NOPASSWD: /usr/sbin/useradd -m -s /usr/sbin/nologin
-$service_user ALL=(ALL) NOPASSWD: /usr/sbin/chpasswd
+$service_user ALL=(ALL): /usr/sbin/useradd -m -s /usr/sbin/nologin
+$service_user ALL=(ALL): /usr/sbin/chpasswd
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/vsftpd.conf
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 50 -f /var/log/vsftpd.log
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 500 /var/log/vsftpd.log
@@ -990,6 +979,7 @@ else
 fi
 
 current_admin_pass="$(grep -E '^ADMIN_PASS=' .env | head -n1 | cut -d= -f2- || true)"
+admin_pass="$current_admin_pass"
 if $reset_secrets; then
   echo
   read -r -p "Escribe un ADMIN_PASS nuevo o pulsa Enter para generar uno seguro: " admin_pass
@@ -1008,6 +998,10 @@ elif [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ];
     echo "Guárdalo ahora: $admin_pass"
   fi
   set_env_value "ADMIN_PASS" "$admin_pass"
+fi
+
+if command -v sudo >/dev/null 2>&1; then
+  printf '%s:%s\n' "$service_user" "$admin_pass" | sudo chpasswd
 fi
 
 echo
