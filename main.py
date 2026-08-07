@@ -45,6 +45,8 @@ FILES_DIR  = os.getenv("FILES_DIR", "/home/mr-robot/senderman/files")
 FTP_USER   = os.getenv("FTP_USER", "jesus12jimmy13")   # Usuario FTP principal
 USER_REGISTRY_DB = Path(__file__).parent / "senderman_registry.sqlite3"
 LEGACY_USER_REGISTRY_FILE = Path(__file__).parent / "users.json"
+USERADD_BIN = "/usr/sbin/useradd"
+CHPASSWD_BIN = "/usr/sbin/chpasswd"
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Senderman FTP Admin")
@@ -410,24 +412,22 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         raise HTTPException(status_code=409, detail="El usuario ya existe en el sistema")
 
     code, _, err = run([
-        "sudo", "useradd",
+        "sudo", USERADD_BIN,
         "-m",
         "-s", "/usr/sbin/nologin",
         username,
     ])
     if code != 0:
-        detail = err or "No se pudo crear el usuario en el sistema"
-        raise HTTPException(status_code=500, detail=f"No se pudo crear el usuario: {detail}")
+        raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
     proc = subprocess.run(
-        ["sudo", "chpasswd"],
+        ["sudo", CHPASSWD_BIN],
         input=f"{username}:{password}\n",
         text=True,
         capture_output=True,
     )
     if proc.returncode != 0:
-        detail = proc.stderr.strip() or "No se pudo establecer la contraseña"
-        raise HTTPException(status_code=500, detail=f"No se pudo establecer la contraseña: {detail}")
+        raise HTTPException(status_code=500, detail=proc.stderr.strip() or "No se pudo establecer la contraseña")
 
     users.append(_default_user_record(username, write_enabled=False))
     _save_user_registry(users)
