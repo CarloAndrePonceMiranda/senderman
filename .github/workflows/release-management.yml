@@ -1,0 +1,166 @@
+name: Release management
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      release_kind:
+        description: "Tipo de cambio para calcular el tag"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - feature
+          - bugfix
+          - hotfix
+      cascade_target_branch:
+        description: "Branch destino para la PR de cascada"
+        required: false
+        default: "develop"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-management-${{ github.sha || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  tag-and-cascade:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve release kind
+        id: release_kind
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_kind="${{ github.event.inputs.release_kind || 'auto' }}"
+          source_ref="${{ github.ref_name }}"
+          source_title="${{ github.event.head_commit.message || github.ref_name }}"
+
+          if [[ "$release_kind" == "auto" ]]; then
+            if [[ "$source_ref" == hotfix/* || "$source_title" == hotfix:* ]]; then
+              release_kind="hotfix"
+            elif [[ "$source_ref" == feature/* || "$source_ref" == feat/* || "$source_title" == feat:* ]]; then
+              release_kind="feature"
+            elif [[ "$source_ref" == bugfix/* || "$source_ref" == fix/* || "$source_title" == fix:* ]]; then
+              release_kind="bugfix"
+            else
+              release_kind="bugfix"
+            fi
+          fi
+
+          echo "release_kind=$release_kind" >> "$GITHUB_OUTPUT"
+          echo "source_ref=$source_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate next tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest_tag="$(git tag --list 'v*' | sort -V | tail -n 1 || true)"
+          release_kind="${{ steps.release_kind.outputs.release_kind }}"
+
+          if [[ -z "$latest_tag" ]]; then
+            major=1
+            minor=0
+            patch=0
+          elif [[ "$latest_tag" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+          else
+            echo "error: el tag más reciente no tiene formato semver: $latest_tag"
+            exit 1
+          fi
+
+          if [[ "$release_kind" == "feature" ]]; then
+            minor=$((minor + 1))
+            patch=0
+          elif [[ "$release_kind" == "hotfix" ]]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          echo "tag=v${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag_name="${{ steps.tag.outputs.tag }}"
+
+          if git rev-parse "$tag_name" >/dev/null 2>&1; then
+            echo "error: el tag $tag_name ya existe"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag_name" -m "Release $tag_name"
+          git push origin "$tag_name"
+
+      - name: Create cascade PR for bugfix merges
+        if: steps.release_kind.outputs.release_kind == 'bugfix'
+        uses: actions/github-script@v7
+        env:
+          CASCADE_TARGET_BRANCH: ${{ github.event.inputs.cascade_target_branch || 'develop' }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const baseBranch = process.env.CASCADE_TARGET_BRANCH || 'develop';
+            const headBranch = 'master';
+
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `heads/${baseBranch}` });
+            } catch (error) {
+              core.info(`Cascade target branch ${baseBranch} not found, skipping.`);
+              return;
+            }
+
+            const openPrs = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${headBranch}`,
+              base: baseBranch,
+              per_page: 100,
+            });
+
+            if (openPrs.data.length > 0) {
+              core.info(`Cascade PR already open from ${headBranch} to ${baseBranch}.`);
+              return;
+            }
+
+            await github.rest.pulls.create({
+              owner,
+              repo,
+              head: headBranch,
+              base: baseBranch,
+              title: 'chore: cascade bugfix changes to develop',
+              body: [
+                'Se creó esta PR de cascada después de integrar un bugfix en master.',
+                '',
+                'Revisa el estado antes de volver a liberar.',
+              ].join('\n'),
+            });

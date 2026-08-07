@@ -410,7 +410,7 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         username,
     ])
     if code != 0:
-        raise HTTPException(status_code=500, detail=err)
+        raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
     proc = subprocess.run(
         ["sudo", "chpasswd"],
@@ -421,7 +421,7 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
     if proc.returncode != 0:
         raise HTTPException(status_code=500, detail=proc.stderr.strip() or "No se pudo establecer la contraseña")
 
-    users.append(_default_user_record(username))
+    users.append(_default_user_record(username, write_enabled=False))
     _save_user_registry(users)
     return {"ok": True, "user": username}
 
@@ -444,7 +444,7 @@ async def api_register_user(request: Request, _: str = Depends(verify)):
     if not _user_exists(username):
         raise HTTPException(status_code=404, detail="El usuario no existe en el sistema")
 
-    users.append(_default_user_record(username))
+    users.append(_default_user_record(username, write_enabled=False))
     _save_user_registry(users)
     return {"ok": True, "user": username}
 
