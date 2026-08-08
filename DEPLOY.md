@@ -18,7 +18,7 @@ cd ftp-admin
 bash install.sh --service
 ```
 
-`install.sh` instala por defecto el tag más reciente. Si necesitas otra versión, usa `bash install.sh --release <tag>` o `bash install.sh --choose-release`.
+`install.sh` instala por defecto el tag más reciente y copia la app a `/opt/senderman-ftp-admin`. Si necesitas otra versión, usa `bash install.sh --release <tag>` o `bash install.sh --choose-release`.
 
 Si prefieres instalar sin habilitar el servicio aún:
 
@@ -26,11 +26,12 @@ Si prefieres instalar sin habilitar el servicio aún:
 bash install.sh
 ```
 
-Al final de la instalación quedan tres accesos en el menú de aplicaciones:
+Al final de la instalación quedan dos accesos en el menú de aplicaciones:
 
 - `Senderman APP`: abre la web.
-- `Senderman Shell`: abre el terminal de administración del servicio.
 - `Senderman Tools`: abre `./install.sh` para el menú de actualización, reinstalación y desinstalación.
+
+La carpeta FTP por defecto vive dentro de la instalación, en `/opt/senderman-ftp-admin/files`, y puedes cambiarla luego en `FILES_DIR` si lo necesitas.
 
 ## Configuración
 
@@ -116,7 +117,7 @@ bash tools/app.sh
 
 Ese comando intenta abrir el navegador en pantalla completa con un navegador compatible y, si no lo encuentra, usa el navegador por defecto.
 
-Si prefieres un acceso gráfico, puedes instalar [Senderman APP](senderman-app.desktop), [Senderman Shell](senderman-shell.desktop) o [Senderman Tools](senderman-tools.desktop) en el escritorio o en el menú de aplicaciones.
+Si prefieres un acceso gráfico, puedes instalar [Senderman APP](senderman-app.desktop) o [Senderman Tools](senderman-tools.desktop) en el escritorio o en el menú de aplicaciones.
 
 ## Checklist final
 
