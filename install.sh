@@ -479,6 +479,7 @@ Icon=$app_icon_path
 Terminal=false
 Categories=Network;System;
 StartupNotify=true
+StartupWMClass=SendermanAPP
 EOF
 
   cat > "$applications_dir/senderman-shell.desktop" <<EOF

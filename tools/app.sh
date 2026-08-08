@@ -2,7 +2,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-panel_url="http://localhost:8080"
+panel_url="http://127.0.0.1:8080"
+browser_profile_dir="$repo_root/.senderman-browser-profile"
+window_class="SendermanAPP"
 
 panel_is_ready() {
   python3 - <<'PY' >/dev/null 2>&1
@@ -43,14 +45,16 @@ start_panel_if_needed
 open_browser() {
   local browser
 
+  mkdir -p "$browser_profile_dir"
+
   for browser in firefox chromium chromium-browser google-chrome google-chrome-stable brave-browser; do
     if command -v "$browser" >/dev/null 2>&1; then
       case "$browser" in
         firefox)
-          exec "$browser" --new-window --kiosk "$panel_url"
+          exec "$browser" --new-instance --profile "$browser_profile_dir" --new-window --kiosk "$panel_url"
           ;;
         chromium|chromium-browser|google-chrome|google-chrome-stable|brave-browser)
-          exec "$browser" --new-window --start-fullscreen "$panel_url"
+          exec "$browser" --user-data-dir="$browser_profile_dir" --new-window --app="$panel_url" --class="$window_class"
           ;;
       esac
     fi
