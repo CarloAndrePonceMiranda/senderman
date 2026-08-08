@@ -538,6 +538,7 @@ remove_console_launchers() {
 
 install_sudoers_rules() {
   local sudoers_file="/etc/sudoers.d/ftp-admin"
+  local ftp_user="jesus12jimmy13"
 
   if ! command -v sudo >/dev/null 2>&1; then
     echo "Aviso: sudo no está disponible; no se pudieron instalar las reglas sudoers."
@@ -548,11 +549,11 @@ install_sudoers_rules() {
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vsftpd
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vsftpd
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vsftpd
-$service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -L jesus12jimmy13
-$service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -U jesus12jimmy13
-$service_user ALL=(ALL) NOPASSWD: /usr/bin/getent shadow jesus12jimmy13
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -L $ftp_user
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/usermod -U $ftp_user
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/getent shadow $ftp_user
 $service_user ALL=(ALL) NOPASSWD: /usr/sbin/useradd -m -s /usr/sbin/nologin *
-$service_user ALL=(ALL): /usr/sbin/chpasswd
+$service_user ALL=(ALL) /usr/sbin/chpasswd
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/vsftpd.conf
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 50 -f /var/log/vsftpd.log
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 500 /var/log/vsftpd.log
