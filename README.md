@@ -10,19 +10,16 @@ Si solo quieres dejarlo funcionando en Ubuntu, usa la guía corta en [DEPLOY.md]
 Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
-2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres abrir el menú interactivo. Por defecto instala el tag más reciente; si quieres otra versión, usa `--release <tag>` o `--choose-release`.
+2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres abrir el menú interactivo. El instalador copia la app a `/opt/senderman-ftp-admin` por defecto y deja `files/` dentro de esa ruta, aunque puedes cambiar `FILES_DIR` en `.env`. Por defecto instala el tag más reciente; si quieres otra versión, usa `--release <tag>` o `--choose-release`.
 3. Durante la instalación el instalador prepara únicamente el servidor.
 4. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Cuando la instalación termina, el menú de aplicaciones incluye un acceso principal y tres accesos directos:
-
-- `Senderman Desktop`: abre el menú principal con dos submenús: `installer` (Instalador de programa) y `sftpadmin` (Administrador de servicio SFTP).
+Cuando la instalación termina, el menú de aplicaciones incluye solo dos accesos directos:
 
 - `Senderman APP`: abre la aplicación web y, si el panel no está arriba, la levanta antes de abrir el navegador.
-- `Senderman Shell`: abre el terminal para iniciar, detener, reiniciar, ver estado, habilitar o deshabilitar el servicio.
-- `Senderman Tools`: abre `./install.sh` para instalación, actualización, reinstalación y ajustes de configuración.
+- `Senderman Tools`: abre `./install.sh` para instalación, actualización, reinstalación y ajustes de configuración. Desde ahí eliges entre el menú del instalador y el menú de administración de Senderman.
 
 Además, el instalador deja disponible el comando `senderman-sftp` en consola para abrir ese mismo menú de SFTP/servicio desde terminal.
 
@@ -38,7 +35,7 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
-- `Senderman APP`, `Senderman Shell` y `Senderman Tools` son los tres accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
+- `Senderman APP` y `Senderman Tools` son los dos accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
 - `tools/update.sh` instala el tag más reciente y permite elegir otro tag publicado.
 
 ## Flujo de ramas y tags
@@ -132,12 +129,9 @@ Si quieres instalar el servidor:
 bash install.sh --server
 ```
 
-Al terminar, el menú de aplicaciones muestra cuatro entradas:
-
-- `Senderman Desktop` para abrir `installer` o `sftpadmin`.
+Al terminar, el menú de aplicaciones muestra dos entradas:
 
 - `Senderman APP` para el panel web.
-- `Senderman Shell` para el control del servicio desde terminal.
 - `Senderman Tools` para actualización, reinstalación y desinstalación.
 
 Si prefieres hacerlo manualmente:
@@ -366,7 +360,7 @@ bash tools/app.sh
 
 El launcher intenta abrir el navegador en pantalla completa si encuentra uno compatible y, si el panel no está activo, lo inicia antes de abrir la web.
 
-Si quieres acceso con doble clic, puedes usar [Senderman APP](senderman-app.desktop), [Senderman Shell](senderman-shell.desktop) o [Senderman Tools](senderman-tools.desktop) como lanzadores gráficos.
+Si quieres acceso con doble clic, puedes usar [Senderman APP](senderman-app.desktop) o [Senderman Tools](senderman-tools.desktop) como lanzadores gráficos.
 
 ---
 

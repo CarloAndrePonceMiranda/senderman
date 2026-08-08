@@ -40,7 +40,7 @@ fi
 while true; do
   clear || true
   printf '\033[36m====================================================================\033[0m\n'
-  printf '\033[1;32mSenderman Desktop\033[0m\n'
+  printf '\033[1;32mSenderman Tools\033[0m\n'
   printf '\033[0;37mSelecciona el menú que quieres abrir\033[0m\n'
   printf '\033[36m====================================================================\033[0m\n'
   echo "installer - Instalador de programa"
