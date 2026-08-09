@@ -28,6 +28,33 @@ function toast(msg, type = 'success') {
   setTimeout(() => document.getElementById(id)?.remove(), 3500);
 }
 
+function showUninstallShutdown() {
+  const overlay = document.getElementById('uninstall-shutdown');
+  const countdown = document.getElementById('uninstall-countdown');
+  if (!overlay || !countdown) return;
+
+  overlay.classList.remove('d-none');
+  document.querySelectorAll('button, input, a').forEach(element => {
+    element.setAttribute('disabled', 'disabled');
+  });
+
+  let remaining = 10;
+  countdown.textContent = remaining;
+  const timer = window.setInterval(() => {
+    remaining -= 1;
+    countdown.textContent = remaining;
+    if (remaining > 0) return;
+
+    window.clearInterval(timer);
+    window.close();
+    window.setTimeout(() => {
+      window.open('', '_self');
+      window.close();
+      window.setTimeout(() => window.location.replace('about:blank'), 250);
+    }, 150);
+  }, 1000);
+}
+
 function setActiveTab(name) {
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === name);
@@ -46,6 +73,10 @@ function switchTab(name) {
 
 function escapeAttr(value) {
   return escapeHtml(String(value)).replace(/'/g, '&#39;');
+}
+
+function apiUrl(path) {
+  return new URL(path, window.location.origin).toString();
 }
 
 function normalizeFilesPath(path) {
@@ -116,7 +147,7 @@ function clearLog() {
 
 async function refreshAll() {
   try {
-    const response = await fetch('/api/status');
+    const response = await fetch(apiUrl('/api/status'));
     if (!response.ok) return;
     const data = await response.json();
 
@@ -177,6 +208,8 @@ async function refreshAll() {
   }
 }
 
+let ftpAutoSyncInFlight = false;
+
 function renderMaintenancePanel(state) {
   const installed = document.getElementById('maintenance-installed');
   const release = document.getElementById('maintenance-release');
@@ -187,6 +220,47 @@ function renderMaintenancePanel(state) {
   if (release) release.textContent = state.release || '—';
   if (root) root.textContent = state.install_root || '—';
   if (service) service.textContent = state.service?.active ? 'Activo' : 'Detenido';
+  loadFtpConfig();
+}
+
+async function loadFtpConfig() {
+  try {
+    const response = await fetch(apiUrl('/api/ftp-config'));
+    if (!response.ok) return;
+    const config = await response.json();
+    document.getElementById('ftp-public-ip').value = config.public_ip || config.detected_public_ip || '';
+    document.getElementById('ftp-control-port').value = config.control_port || 21;
+    document.getElementById('ftp-passive-min').value = config.passive_min_port || 40404;
+    document.getElementById('ftp-passive-max').value = config.passive_max_port || 40404;
+    document.getElementById('ftp-detected-ip').textContent = config.detected_public_ip ? `Detectada: ${config.detected_public_ip}` : 'No se pudo detectar automáticamente';
+    document.getElementById('ftp-forwarding-summary').textContent = `TCP ${config.control_port || 21} y TCP ${config.passive_min_port || 40404}-${config.passive_max_port || 40404} -> este equipo`;
+
+    if (config.detected_public_ip && config.detected_public_ip !== config.public_ip && !ftpAutoSyncInFlight) {
+      ftpAutoSyncInFlight = true;
+      document.getElementById('ftp-detected-ip').textContent = `Cambio detectado: actualizando a ${config.detected_public_ip}...`;
+      await saveFtpConfig(config.detected_public_ip, true);
+      ftpAutoSyncInFlight = false;
+    }
+  } catch (error) {
+    console.error(error);
+    ftpAutoSyncInFlight = false;
+  }
+}
+
+async function saveFtpConfig(publicIp = null, automatic = false) {
+  const payload = {
+    public_ip: publicIp || document.getElementById('ftp-public-ip').value.trim(),
+    control_port: Number(document.getElementById('ftp-control-port').value),
+    passive_min_port: Number(document.getElementById('ftp-passive-min').value),
+    passive_max_port: Number(document.getElementById('ftp-passive-max').value),
+  };
+  const response = await fetch(apiUrl('/api/ftp-config'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.detail || 'No se pudo guardar la configuración FTP');
+  toast(automatic ? 'IP pública actualizada automáticamente' : 'Configuración FTP aplicada y servicio reiniciado', 'success');
+  const config = result.config || {};
+  document.getElementById('ftp-public-ip').value = config.public_ip || payload.public_ip;
+  document.getElementById('ftp-detected-ip').textContent = config.detected_public_ip ? `Detectada: ${config.detected_public_ip}` : 'No se pudo detectar automáticamente';
 }
 
 function applyTheme(theme) {
@@ -207,7 +281,7 @@ function toggleTheme() {
 async function serviceAction(action) {
   const labels = { start: 'Iniciando', stop: 'Deteniendo', restart: 'Reiniciando' };
   try {
-    const response = await fetch(`/api/service/${action}`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/service/${action}`), { method: 'POST' });
     if (response.ok) {
       toast(`${labels[action]} vsftpd...`, 'info');
       setTimeout(refreshAll, 1500);
@@ -233,9 +307,9 @@ async function maintenanceAction(action) {
       const confirmed = window.confirm(`¿Seguro que quieres desinstalar Senderman?${keepConfig ? ' Se conservará la configuración local.' : ' Se eliminará también la configuración local.'}`);
       if (!confirmed) return;
 
-      const response = await fetch(`/api/maintenance/uninstall?keep_config=${keepConfig ? 'true' : 'false'}`, { method: 'POST' });
+      const response = await fetch(apiUrl(`/api/maintenance/uninstall?keep_config=${keepConfig ? 'true' : 'false'}`), { method: 'POST' });
       if (response.ok) {
-        toast('Desinstalación iniciada', 'info');
+        showUninstallShutdown();
         return;
       }
       const error = await response.json().catch(() => ({}));
@@ -244,7 +318,7 @@ async function maintenanceAction(action) {
     }
 
     const endpoint = action === 'maintenance-install' ? '/api/maintenance/install' : '/api/maintenance/update';
-    const response = await fetch(endpoint, { method: 'POST' });
+    const response = await fetch(apiUrl(endpoint), { method: 'POST' });
     if (response.ok) {
       toast(`${labels[action]} Senderman...`, 'info');
       setTimeout(refreshAll, 1500);
@@ -284,7 +358,7 @@ function fillEditModal(user) {
 }
 
 async function loadUserForEdit(username) {
-  const response = await fetch(`/api/users/${encodeURIComponent(username)}`);
+  const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}`));
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || 'No se pudo cargar el usuario');
@@ -329,7 +403,7 @@ async function registerUser() {
   }
 
   try {
-    const response = await fetch('/api/users/create', {
+    const response = await fetch(apiUrl('/api/users/create'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, home_dir: homeDir, quota_bytes: quotaBytes, public_key: publicKey, generate_keypair: generateKeypair }),
@@ -381,7 +455,7 @@ async function saveEditedUser() {
   const modal = bootstrap.Modal.getInstance(document.getElementById('edit-user-modal'));
 
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(originalName)}`, {
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(originalName)}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -413,7 +487,7 @@ async function deleteUserByName(username) {
   if (!confirmed) return;
 
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(username)}?remove_home=true`, { method: 'DELETE' });
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}?remove_home=true`), { method: 'DELETE' });
     if (response.ok) {
       toast('Usuario eliminado', 'success');
       bootstrap.Modal.getInstance(document.getElementById('edit-user-modal'))?.hide();
@@ -434,7 +508,7 @@ async function deleteEditedUser() {
 
 async function generateUserKeyForUser(username) {
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(username)}/keys/generate`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}/keys/generate`), { method: 'POST' });
     if (!response.ok) {
       const error = await response.json();
       toast(error.detail || 'No se pudo generar la clave', 'danger');
@@ -515,7 +589,7 @@ function renderUserRegistry(users) {
 
 async function userAction(username, action) {
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(username)}/${action}`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}/${action}`), { method: 'POST' });
     if (response.ok) {
       toast(action === 'lock' ? 'Usuario bloqueado' : 'Usuario desbloqueado', action === 'lock' ? 'danger' : 'success');
       refreshAll();
@@ -530,7 +604,7 @@ async function userAction(username, action) {
 
 async function userWriteAction(username, state) {
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(username)}/write/${state}`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}/write/${state}`), { method: 'POST' });
     if (response.ok) {
       toast(state === 'on' ? 'Escritura habilitada' : 'Escritura deshabilitada', state === 'on' ? 'success' : 'info');
       refreshAll();
@@ -554,7 +628,7 @@ async function loadFiles(path = currentFilesPath) {
   tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary py-3">Cargando...</td></tr>';
   try {
     const normalizedPath = normalizeFilesPath(path);
-    const response = await fetch(`/api/files?path=${encodeURIComponent(normalizedPath)}`);
+    const response = await fetch(apiUrl(`/api/files?path=${encodeURIComponent(normalizedPath)}`));
     if (!response.ok) throw new Error('files');
     const payload = await response.json();
     const files = payload.entries || [];
@@ -612,7 +686,7 @@ async function loadFiles(path = currentFilesPath) {
 
 async function downloadFile(path) {
   try {
-    const response = await fetch(`/api/files/download?path=${encodeURIComponent(path)}`);
+    const response = await fetch(apiUrl(`/api/files/download?path=${encodeURIComponent(path)}`));
     if (!response.ok) throw new Error('download');
     const blob = await response.blob();
     const contentDisposition = response.headers.get('content-disposition') || '';
@@ -643,7 +717,7 @@ async function uploadItems(items) {
   });
 
   try {
-    const response = await fetch(`/api/files/upload?path=${encodeURIComponent(currentFilesPath)}`, {
+    const response = await fetch(apiUrl(`/api/files/upload?path=${encodeURIComponent(currentFilesPath)}`), {
       method: 'POST',
       body: formData,
     });
@@ -784,6 +858,9 @@ function bindUI() {
 
   document.querySelectorAll('[data-action="maintenance-uninstall"]').forEach(button => {
     button.addEventListener('click', () => maintenanceAction('maintenance-uninstall'));
+  });
+  document.querySelectorAll('[data-action="save-ftp-config"]').forEach(button => {
+    button.addEventListener('click', () => saveFtpConfig().catch(error => toast(error.message, 'danger')));
   });
 
   document.querySelectorAll('[data-action="go-monitor"]').forEach(button => {

@@ -2,9 +2,27 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-panel_url="http://127.0.0.1:8080"
-browser_profile_dir="$repo_root/.senderman-browser-profile"
+panel_url="http://127.0.0.1:8080/?v=20260809"
 window_class="SendermanAPP"
+
+python_bin() {
+  if [ -x "$repo_root/.venv/bin/python" ]; then
+    printf '%s' "$repo_root/.venv/bin/python"
+    return 0
+  fi
+
+  if [ -x "/home/mr-robot/ftp-admin/.venv/bin/python" ]; then
+    printf '%s' "/home/mr-robot/ftp-admin/.venv/bin/python"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    command -v python3
+    return 0
+  fi
+
+  return 1
+}
 
 panel_is_ready() {
   python3 - <<'PY' >/dev/null 2>&1
@@ -26,11 +44,14 @@ start_panel_if_needed() {
     return 0
   fi
 
-  if [ ! -x "$repo_root/.venv/bin/python" ] || [ ! -f "$repo_root/main.py" ]; then
+  local python_path
+  python_path="$(python_bin || true)"
+
+  if [ -z "$python_path" ] || [ ! -f "$repo_root/main.py" ]; then
     return 0
   fi
 
-  nohup "$repo_root/.venv/bin/python" "$repo_root/main.py" > "$repo_root/panel.log" 2>&1 &
+  nohup "$python_path" "$repo_root/main.py" > "$repo_root/panel.log" 2>&1 &
 
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     if panel_is_ready; then
@@ -45,18 +66,9 @@ start_panel_if_needed
 open_browser() {
   local browser
 
-  mkdir -p "$browser_profile_dir"
-
-  for browser in firefox chromium chromium-browser google-chrome google-chrome-stable brave-browser; do
+  for browser in chromium chromium-browser google-chrome google-chrome-stable brave-browser; do
     if command -v "$browser" >/dev/null 2>&1; then
-      case "$browser" in
-        firefox)
-          exec "$browser" --new-instance --profile "$browser_profile_dir" --new-window --kiosk "$panel_url"
-          ;;
-        chromium|chromium-browser|google-chrome|google-chrome-stable|brave-browser)
-          exec "$browser" --user-data-dir="$browser_profile_dir" --new-window --app="$panel_url" --class="$window_class"
-          ;;
-      esac
+      exec "$browser" --new-window --app="$panel_url" --class="$window_class"
     fi
   done
 

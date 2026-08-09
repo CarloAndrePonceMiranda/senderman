@@ -489,7 +489,11 @@ launch_installer_menu() {
 
       case "$choice" in
         install)
-          run_installer_command --latest-release --server
+          local args=(--latest-release --server)
+          if $install_service; then
+            args=(--service "${args[@]}")
+          fi
+          run_installer_command "${args[@]}"
           read -r -p "Pulsa Enter para continuar..." _
           ;;
         exit)
@@ -605,8 +609,8 @@ install_app_icon() {
   raster_icons_dir="$icons_root/256x256/apps"
 
   mkdir -p "$scalable_icons_dir" "$raster_icons_dir"
-  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/senderman-ftp-admin.svg"
-  rm -f "$raster_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-monitor.svg" "$raster_icons_dir/senderman-configuration.svg" "$raster_icons_dir/senderman-ftp-admin.png" "$raster_icons_dir/senderman-ftp-admin.svg"
+  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/senderman-ftp-admin.svg"
+  rm -f "$raster_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-shell.svg" "$raster_icons_dir/senderman-monitor.svg" "$raster_icons_dir/senderman-configuration.svg" "$raster_icons_dir/senderman-ftp-admin.png" "$raster_icons_dir/senderman-ftp-admin.svg"
 
   cat > "$scalable_icons_dir/senderman-app.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman APP">
@@ -660,7 +664,7 @@ install_desktop_shortcuts() {
   mkdir -p "$applications_dir"
   install_app_icon
 
-  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-menu.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-menu.desktop" "$applications_dir/sftp-menu.desktop"
 
   cat > "$applications_dir/senderman.desktop" <<EOF
 [Desktop Entry]
@@ -744,9 +748,9 @@ remove_desktop_shortcuts() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
   scalable_icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 
-  rm -f "$applications_dir/senderman-menu.desktop" "$applications_dir/senderman.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
-  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
-  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/sftp-matrix.svg"
+  rm -f "$applications_dir/senderman-menu.desktop" "$applications_dir/senderman.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
+  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/sftp-matrix.svg"
 }
 
 uninstall_application() {
@@ -1236,8 +1240,6 @@ if [ "$install_profile" = "uninstall" ]; then
   exit 0
 fi
 
-sync_install_root
-
 if [ "$install_profile" != "client" ]; then
   if ! python3 -c 'import venv' >/dev/null 2>&1; then
     echo "error: python3-venv no está instalado"
@@ -1294,6 +1296,7 @@ else
   cp .env.example .env
   chmod 600 .env
   set_env_value "FILES_DIR" "$install_root/files"
+  set_env_value "VSFTPD_CONF" "/etc/vsftpd.conf"
   set_env_value "SFTP_ROOT_DIR" "$sftp_root_dir"
   echo "Se creó .env desde .env.example con permisos 600."
 fi
@@ -1318,10 +1321,6 @@ elif [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ];
     echo "Guárdalo ahora: $admin_pass"
   fi
   set_env_value "ADMIN_PASS" "$admin_pass"
-fi
-
-if command -v sudo >/dev/null 2>&1; then
-  printf '%s:%s\n' "$service_user" "$admin_pass" | sudo chpasswd
 fi
 
 echo

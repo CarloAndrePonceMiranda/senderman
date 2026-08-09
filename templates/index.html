@@ -11,6 +11,13 @@
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>
 <body data-theme="dark">
+<div id="uninstall-shutdown" class="uninstall-shutdown d-none" role="status" aria-live="polite">
+  <div class="uninstall-shutdown-panel">
+    <i class="bi bi-check2-circle text-success fs-1"></i>
+    <h1>Senderman desinstalado</h1>
+    <p>La ventana se cerrará en <strong id="uninstall-countdown">10</strong> segundos.</p>
+  </div>
+</div>
 
 <header>
   <nav class="navbar navbar-dark px-4 py-2 glass-panel mx-3 mt-3">
@@ -291,6 +298,41 @@
                   </div>
                 </div>
               </div>
+
+              <div class="col-12">
+                <div class="card">
+                  <div class="card-header py-2 px-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-router text-primary"></i>
+                    <span class="fw-semibold">Conectividad FTP externa</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                      <div class="col-12 col-md-4">
+                        <label for="ftp-public-ip" class="form-label small text-secondary">IP pública anunciada</label>
+                        <input id="ftp-public-ip" class="form-control" placeholder="189.242.5.165" inputmode="decimal" />
+                        <div id="ftp-detected-ip" class="form-text">Detectando IP pública...</div>
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <label for="ftp-control-port" class="form-label small text-secondary">Puerto FTP</label>
+                        <input id="ftp-control-port" class="form-control" type="number" min="1" max="65535" />
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <label for="ftp-passive-min" class="form-label small text-secondary">Pasivo desde</label>
+                        <input id="ftp-passive-min" class="form-control" type="number" min="1024" max="65535" />
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <label for="ftp-passive-max" class="form-label small text-secondary">Pasivo hasta</label>
+                        <input id="ftp-passive-max" class="form-control" type="number" min="1024" max="65535" />
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <button class="btn btn-action w-100" type="button" data-action="save-ftp-config"><i class="bi bi-save me-1"></i>Aplicar</button>
+                      </div>
+                    </div>
+                    <div class="small text-secondary mt-3">La app puede configurar este servidor y reiniciar vsftpd. En el router debes reenviar TCP al equipo servidor: el puerto FTP y el rango pasivo. Si usas SFTP, reenvía solo TCP 22.</div>
+                    <div class="small text-secondary mt-2">Para FTP con estos valores: <code id="ftp-forwarding-summary">—</code></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -411,6 +453,6 @@
 <div id="toast-container"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/app.js"></script>
+<script src="/static/js/app.js?v=20260809d"></script>
 </body>
 </html>

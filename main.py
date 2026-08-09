@@ -8,6 +8,8 @@ import subprocess
 import sqlite3
 import shutil
 import tempfile
+import ipaddress
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -348,6 +350,48 @@ def get_write_enabled() -> bool:
         return "write_enable=YES" in conf
     except:
         return False
+
+
+def _read_vsftpd_config() -> str:
+    try:
+        return Path(VSFTPD_CONF).read_text()
+    except OSError:
+        return ""
+
+
+def _vsftpd_value(config: str, key: str, default: str = "") -> str:
+    match = re.search(rf"^\s*{re.escape(key)}\s*=\s*(.*?)\s*$", config, re.MULTILINE)
+    return match.group(1) if match else default
+
+
+def get_ftp_network_config() -> dict:
+    config = _read_vsftpd_config()
+    try:
+        detected_public_ip = urllib.request.urlopen("https://api.ipify.org", timeout=3).read().decode().strip()
+        ipaddress.ip_address(detected_public_ip)
+    except Exception:
+        detected_public_ip = ""
+
+    return {
+        "config_path": VSFTPD_CONF,
+        "public_ip": _vsftpd_value(config, "pasv_address"),
+        "detected_public_ip": detected_public_ip,
+        "control_port": int(_vsftpd_value(config, "listen_port", "21") or "21"),
+        "passive_min_port": int(_vsftpd_value(config, "pasv_min_port", "40404") or "40404"),
+        "passive_max_port": int(_vsftpd_value(config, "pasv_max_port", "40404") or "40404"),
+    }
+
+
+def _set_vsftpd_values(config: str, values: dict[str, str]) -> str:
+    updated = config
+    for key, value in values.items():
+        pattern = rf"^\s*{re.escape(key)}\s*=.*$"
+        replacement = f"{key}={value}"
+        if re.search(pattern, updated, re.MULTILINE):
+            updated = re.sub(pattern, replacement, updated, flags=re.MULTILINE)
+        else:
+            updated = updated.rstrip() + f"\n{replacement}\n"
+    return updated
 
 
 def _default_user_record(
@@ -925,6 +969,50 @@ async def api_service(action: str, _: str = Depends(verify)):
     if code != 0:
         raise HTTPException(status_code=500, detail=err)
     return {"ok": True, "action": action}
+
+
+@app.get("/api/ftp-config")
+async def api_ftp_config(_: str = Depends(verify)):
+    return get_ftp_network_config()
+
+
+@app.post("/api/ftp-config")
+async def api_update_ftp_config(request: Request, _: str = Depends(verify)):
+    payload = await request.json()
+    public_ip = str(payload.get("public_ip", "")).strip()
+    try:
+        ipaddress.ip_address(public_ip)
+        control_port = int(payload.get("control_port", 21))
+        passive_min_port = int(payload.get("passive_min_port", 40404))
+        passive_max_port = int(payload.get("passive_max_port", passive_min_port))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="IP o puerto inválido")
+
+    if not 1 <= control_port <= 65535:
+        raise HTTPException(status_code=400, detail="El puerto FTP debe estar entre 1 y 65535")
+    if not 1024 <= passive_min_port <= passive_max_port <= 65535:
+        raise HTTPException(status_code=400, detail="El rango pasivo debe estar entre 1024 y 65535")
+    if control_port in range(passive_min_port, passive_max_port + 1):
+        raise HTTPException(status_code=400, detail="El puerto FTP no puede estar dentro del rango pasivo")
+
+    config = _read_vsftpd_config()
+    if not config:
+        raise HTTPException(status_code=500, detail=f"No se pudo leer {VSFTPD_CONF}")
+
+    updated_config = _set_vsftpd_values(config, {
+        "listen_port": str(control_port),
+        "pasv_min_port": str(passive_min_port),
+        "pasv_max_port": str(passive_max_port),
+        "pasv_address": public_ip,
+    })
+    proc = subprocess.run(["sudo", "tee", VSFTPD_CONF], input=updated_config.encode(), capture_output=True)
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail=proc.stderr.decode(errors="replace").strip() or "No se pudo guardar la configuración")
+
+    code, _, err = run(["sudo", "systemctl", "restart", "vsftpd"])
+    if code != 0:
+        raise HTTPException(status_code=500, detail=err or "No se pudo reiniciar vsftpd")
+    return {"ok": True, "config": get_ftp_network_config()}
 
 
 @app.post("/api/write/{state}")
