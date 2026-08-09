@@ -252,7 +252,6 @@ async function maintenanceAction(action) {
     }
     const error = await response.json().catch(() => ({}));
     toast(error.detail || 'Error', 'danger');
-  } catch (error) {
     toast('Error de red', 'danger');
   }
 }
