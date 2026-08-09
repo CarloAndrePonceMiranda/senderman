@@ -35,7 +35,7 @@ function setActiveTab(name) {
 }
 
 function switchTab(name) {
-  ['activity', 'users', 'files'].forEach(tab => {
+  ['activity', 'users', 'files', 'maintenance'].forEach(tab => {
     document.getElementById(`tab-${tab}`).classList.add('d-none');
   });
   document.getElementById(`tab-${name}`).classList.remove('d-none');
@@ -140,6 +140,7 @@ async function refreshAll() {
     }
 
     renderUserRegistry(data.users || []);
+    renderMaintenancePanel(data.maintenance || {});
 
     const startBtn = document.getElementById('service-start-btn');
     const stopBtn = document.getElementById('service-stop-btn');
@@ -176,6 +177,18 @@ async function refreshAll() {
   }
 }
 
+function renderMaintenancePanel(state) {
+  const installed = document.getElementById('maintenance-installed');
+  const release = document.getElementById('maintenance-release');
+  const root = document.getElementById('maintenance-root');
+  const service = document.getElementById('maintenance-service');
+
+  if (installed) installed.textContent = state.installed ? 'Sí' : 'No';
+  if (release) release.textContent = state.release || '—';
+  if (root) root.textContent = state.install_root || '—';
+  if (service) service.textContent = state.service?.active ? 'Activo' : 'Detenido';
+}
+
 function applyTheme(theme) {
   const body = document.body;
   const icon = document.getElementById('theme-icon');
@@ -207,6 +220,247 @@ async function serviceAction(action) {
   }
 }
 
+async function maintenanceAction(action) {
+  const labels = {
+    'maintenance-install': 'Instalando',
+    'maintenance-update': 'Actualizando',
+    'maintenance-uninstall': 'Desinstalando',
+  };
+
+  try {
+    if (action === 'maintenance-uninstall') {
+      const keepConfig = document.getElementById('maintenance-keep-config')?.checked ?? true;
+      const confirmed = window.confirm(`¿Seguro que quieres desinstalar Senderman?${keepConfig ? ' Se conservará la configuración local.' : ' Se eliminará también la configuración local.'}`);
+      if (!confirmed) return;
+
+      const response = await fetch(`/api/maintenance/uninstall?keep_config=${keepConfig ? 'true' : 'false'}`, { method: 'POST' });
+      if (response.ok) {
+        toast('Desinstalación iniciada', 'info');
+        return;
+      }
+      const error = await response.json();
+      toast(error.detail || 'Error', 'danger');
+      return;
+    }
+
+    const endpoint = action === 'maintenance-install' ? '/api/maintenance/install' : '/api/maintenance/update';
+    const response = await fetch(endpoint, { method: 'POST' });
+    if (response.ok) {
+      toast(`${labels[action]} Senderman...`, 'info');
+      setTimeout(refreshAll, 1500);
+      return;
+    }
+    const error = await response.json();
+    toast(error.detail || 'Error', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+function downloadTextFile(filename, content, mimeType = 'text/plain') {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function openUserModal(modalId) {
+  return bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId));
+}
+
+function fillEditModal(user) {
+  document.getElementById('edit-user-original-name').value = user.username || '';
+  document.getElementById('edit-user-name').value = user.username || '';
+  document.getElementById('edit-user-home').value = user.home_dir || '';
+  document.getElementById('edit-user-key').value = user.public_key || '';
+  document.getElementById('edit-user-quota').value = Number(user.quota_bytes || 0);
+  document.getElementById('edit-user-locked').checked = !!user.locked;
+  document.getElementById('edit-user-write').checked = !!user.write_enabled;
+}
+
+async function loadUserForEdit(username) {
+  const response = await fetch(`/api/users/${encodeURIComponent(username)}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'No se pudo cargar el usuario');
+  }
+  return response.json();
+}
+
+function resetCreateForm() {
+  const nameInput = document.getElementById('new-user-name');
+  const homeInput = document.getElementById('new-user-home');
+  const quotaInput = document.getElementById('new-user-quota');
+  const keyInput = document.getElementById('new-user-key');
+  const generateInput = document.getElementById('new-user-generate-key');
+  if (nameInput) nameInput.value = '';
+  if (homeInput) homeInput.value = '';
+  if (quotaInput) quotaInput.value = '0';
+  if (keyInput) keyInput.value = '';
+  if (generateInput) generateInput.checked = true;
+}
+
+async function registerUser() {
+  const input = document.getElementById('new-user-name');
+  const homeInput = document.getElementById('new-user-home');
+  const quotaInput = document.getElementById('new-user-quota');
+  const publicKeyInput = document.getElementById('new-user-key');
+  const generateInput = document.getElementById('new-user-generate-key');
+  const modalElement = document.getElementById('register-user-modal');
+  const modal = bootstrap.Modal.getInstance(modalElement);
+  const username = input.value.trim();
+  const homeDir = homeInput.value.trim();
+  const quotaBytes = Number(quotaInput.value || 0);
+  const publicKey = publicKeyInput.value.trim();
+  const generateKeypair = !!generateInput.checked;
+
+  if (!username) {
+    toast('Escribe un nombre de usuario', 'danger');
+    return;
+  }
+  if (!publicKey && !generateKeypair) {
+    toast('Pega una clave pública o activa la generación automática', 'danger');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/users/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, home_dir: homeDir, quota_bytes: quotaBytes, public_key: publicKey, generate_keypair: generateKeypair }),
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      input.value = '';
+      homeInput.value = '';
+      quotaInput.value = '0';
+      publicKeyInput.value = '';
+      generateInput.checked = true;
+      toast('Usuario registrado en el panel', 'success');
+      if (payload.private_key) {
+        downloadTextFile(`${username}-sftp.key`, payload.private_key);
+        toast('La clave privada se descargó automáticamente', 'info');
+      }
+      if (modal) modal.hide();
+      refreshAll();
+      return;
+    }
+    const error = await response.json();
+    toast(error.detail || 'Error al registrar', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function openEditUserModal(username, options = {}) {
+  try {
+    const user = await loadUserForEdit(username);
+    fillEditModal(user);
+    openUserModal('edit-user-modal').show();
+    if (options.generateKey) {
+      setTimeout(() => generateUserKeyForUser(username), 250);
+    }
+  } catch (error) {
+    toast(error.message || 'No se pudo cargar el usuario', 'danger');
+  }
+}
+
+async function saveEditedUser() {
+  const originalName = document.getElementById('edit-user-original-name').value.trim();
+  const newName = document.getElementById('edit-user-name').value.trim();
+  const homeDir = document.getElementById('edit-user-home').value.trim();
+  const quotaBytes = Number(document.getElementById('edit-user-quota').value || 0);
+  const publicKey = document.getElementById('edit-user-key').value.trim();
+  const locked = document.getElementById('edit-user-locked').checked;
+  const writeEnabled = document.getElementById('edit-user-write').checked;
+  const modal = bootstrap.Modal.getInstance(document.getElementById('edit-user-modal'));
+
+  try {
+    const response = await fetch(`/api/users/${encodeURIComponent(originalName)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        new_username: newName,
+        home_dir: homeDir,
+        quota_bytes: quotaBytes,
+        public_key: publicKey,
+        locked,
+        write_enabled: writeEnabled,
+      }),
+    });
+
+    if (response.ok) {
+      toast('Usuario actualizado', 'success');
+      if (modal) modal.hide();
+      refreshAll();
+      return;
+    }
+
+    const error = await response.json();
+    toast(error.detail || 'No se pudo guardar el usuario', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function deleteUserByName(username) {
+  const confirmed = window.confirm(`¿Eliminar al usuario ${username}?`);
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(`/api/users/${encodeURIComponent(username)}?remove_home=true`, { method: 'DELETE' });
+    if (response.ok) {
+      toast('Usuario eliminado', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('edit-user-modal'))?.hide();
+      refreshAll();
+      return;
+    }
+    const error = await response.json();
+    toast(error.detail || 'No se pudo eliminar el usuario', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function deleteEditedUser() {
+  const originalName = document.getElementById('edit-user-original-name').value.trim();
+  return deleteUserByName(originalName);
+}
+
+async function generateUserKeyForUser(username) {
+  try {
+    const response = await fetch(`/api/users/${encodeURIComponent(username)}/keys/generate`, { method: 'POST' });
+    if (!response.ok) {
+      const error = await response.json();
+      toast(error.detail || 'No se pudo generar la clave', 'danger');
+      return;
+    }
+
+    const payload = await response.json();
+    const keyInput = document.getElementById('edit-user-key');
+    if (document.getElementById('edit-user-original-name').value.trim() === username && keyInput) {
+      keyInput.value = payload.public_key || '';
+    }
+    if (payload.private_key) {
+      downloadTextFile(`${username}-sftp.key`, payload.private_key);
+      toast('La clave privada se descargó automáticamente', 'info');
+    }
+    refreshAll();
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function generateUserKeyForEdit() {
+  const originalName = document.getElementById('edit-user-original-name').value.trim();
+  return generateUserKeyForUser(originalName);
+}
+
 function renderUserRegistry(users) {
   const tbody = document.getElementById('users-registry-tbody');
   if (!tbody) return;
@@ -219,12 +473,17 @@ function renderUserRegistry(users) {
   tbody.innerHTML = users.map(user => {
     const locked = !!user.locked;
     const writeEnabled = !!user.write_enabled;
+    const quotaBytes = Number(user.quota_bytes || 0);
     const stateIcon = locked ? 'bi-lock-fill' : 'bi-unlock-fill';
     const writeIcon = writeEnabled ? 'bi-pencil-square' : 'bi-file-lock2-fill';
+    const quotaLabel = quotaBytes > 0 ? `Cuota: ${formatBytes(quotaBytes)}` : 'Cuota: sin límite';
 
     return `
       <tr class="connected-row">
-        <td><i class="bi bi-person-fill text-info me-1"></i><code>${escapeHtml(user.username)}</code></td>
+        <td>
+          <i class="bi bi-person-fill text-info me-1"></i><code>${escapeHtml(user.username)}</code>
+          <div class="small text-secondary">${escapeHtml(quotaLabel)}</div>
+        </td>
         <td class="cell-center">
           <button class="btn btn-sm btn-action user-action-btn user-registry-toggle ${locked ? 'toggle-blocked' : 'toggle-active'}" type="button" data-user-action="${locked ? 'unlock' : 'lock'}" data-username="${escapeHtml(user.username)}">
             <i class="bi ${stateIcon}"></i>
@@ -236,6 +495,19 @@ function renderUserRegistry(users) {
             <i class="bi ${writeIcon}"></i>
             <span class="toggle-label">${writeEnabled ? 'ON' : 'OFF'}</span>
           </button>
+        </td>
+        <td class="text-end">
+          <div class="d-flex justify-content-end gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-info btn-action" type="button" data-action="edit-user" data-username="${escapeHtml(user.username)}">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="generate-key" data-username="${escapeHtml(user.username)}">
+              <i class="bi bi-key"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger btn-action" type="button" data-action="delete-user" data-username="${escapeHtml(user.username)}">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </div>
         </td>
       </tr>`;
   }).join('');
@@ -273,45 +545,8 @@ async function userWriteAction(username, state) {
 
 function openRegisterModal() {
   const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('register-user-modal'));
+  resetCreateForm();
   modal.show();
-}
-
-async function registerUser() {
-  const input = document.getElementById('new-user-name');
-  const passwordInput = document.getElementById('new-user-pass');
-  const modalElement = document.getElementById('register-user-modal');
-  const modal = bootstrap.Modal.getInstance(modalElement);
-  const username = input.value.trim();
-  const password = passwordInput.value;
-
-  if (!username) {
-    toast('Escribe un nombre de usuario', 'danger');
-    return;
-  }
-  if (!password || password.length < 8) {
-    toast('La contraseña debe tener al menos 8 caracteres', 'danger');
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/users/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (response.ok) {
-      input.value = '';
-      passwordInput.value = '';
-      toast('Usuario registrado en el panel', 'success');
-      if (modal) modal.hide();
-      refreshAll();
-      return;
-    }
-    const error = await response.json();
-    toast(error.detail || 'Error al registrar', 'danger');
-  } catch (error) {
-    toast('Error de red', 'danger');
-  }
 }
 
 async function loadFiles(path = currentFilesPath) {
@@ -539,6 +774,26 @@ function bindUI() {
     button.addEventListener('click', () => serviceAction(button.dataset.serviceAction));
   });
 
+  document.querySelectorAll('[data-action="maintenance-install"]').forEach(button => {
+    button.addEventListener('click', () => maintenanceAction('maintenance-install'));
+  });
+
+  document.querySelectorAll('[data-action="maintenance-update"]').forEach(button => {
+    button.addEventListener('click', () => maintenanceAction('maintenance-update'));
+  });
+
+  document.querySelectorAll('[data-action="maintenance-uninstall"]').forEach(button => {
+    button.addEventListener('click', () => maintenanceAction('maintenance-uninstall'));
+  });
+
+  document.querySelectorAll('[data-action="go-monitor"]').forEach(button => {
+    button.addEventListener('click', () => switchTab('activity'));
+  });
+
+  document.getElementById('save-user-btn')?.addEventListener('click', saveEditedUser);
+  document.getElementById('delete-user-btn')?.addEventListener('click', deleteEditedUser);
+  document.getElementById('generate-user-key-btn')?.addEventListener('click', generateUserKeyForEdit);
+
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.addEventListener('click', () => switchTab(button.dataset.tab));
   });
@@ -558,6 +813,24 @@ function bindUI() {
   }
 
   document.addEventListener('click', event => {
+    const editButton = event.target.closest('button[data-action="edit-user"]');
+    if (editButton) {
+      openEditUserModal(editButton.dataset.username || '');
+      return;
+    }
+
+    const generateButton = event.target.closest('button[data-action="generate-key"]');
+    if (generateButton) {
+      openEditUserModal(generateButton.dataset.username || '', { generateKey: true });
+      return;
+    }
+
+    const deleteButton = event.target.closest('button[data-action="delete-user"]');
+    if (deleteButton && deleteButton.dataset.username) {
+      deleteUserByName(deleteButton.dataset.username);
+      return;
+    }
+
     const openButton = event.target.closest('button[data-action="open-folder"]');
     if (openButton) {
       const nextPath = normalizeFilesPath(openButton.dataset.path || '');

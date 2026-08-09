@@ -19,6 +19,7 @@ bash install.sh --service
 ```
 
 `install.sh` instala por defecto el tag más reciente y copia la app a `/opt/senderman-ftp-admin`. Si necesitas otra versión, usa `bash install.sh --release <tag>` o `bash install.sh --choose-release`.
+Durante la instalación también crea el grupo SFTP dedicado y deja `sshd` configurado para aceptar solo claves públicas en ese grupo.
 
 Si prefieres instalar sin habilitar el servicio aún:
 
@@ -28,10 +29,13 @@ bash install.sh
 
 Al final de la instalación quedan dos accesos en el menú de aplicaciones:
 
-- `Senderman APP`: abre la web.
-- `Senderman Tools`: abre `./install.sh` para el menú de actualización, reinstalación y desinstalación.
+- `Senderman`: abre la web.
 
-La carpeta FTP por defecto vive dentro de la instalación, en `/opt/senderman-ftp-admin/files`, y puedes cambiarla luego en `FILES_DIR` si lo necesitas.
+La actualización, la desinstalación y el monitor ya se gestionan desde la pestaña **Mantenimiento** del panel web.
+
+La carpeta compartida por defecto vive dentro de la instalación, en `/opt/senderman-ftp-admin/files`, y puedes cambiarla luego en `FILES_DIR` si lo necesitas.
+
+Si vas a usar cuotas por cliente, activa cuotas en el filesystem que contiene `SFTP_ROOT_DIR` y verifica que `setquota` esté instalado; si no, el panel seguirá guardando el límite pero no podrá imponerlo en el sistema.
 
 ## Configuración
 
@@ -39,6 +43,7 @@ La carpeta FTP por defecto vive dentro de la instalación, en `/opt/senderman-ft
 Si cambias rutas o usuario, revisa también el archivo `/etc/sudoers.d/ftp-admin`.
 
 El registro de usuarios se guarda en `senderman_registry.sqlite3`; si vienes de una versión anterior, el instalador migra `users.json` automáticamente al arrancar el panel.
+Los usuarios SFTP nuevos y existentes quedan ligados al grupo `senderman-sftp` para que `sshd` aplique la política de clave-only.
 
 ## Actualización
 
@@ -117,7 +122,8 @@ bash tools/app.sh
 
 Ese comando intenta abrir el navegador en pantalla completa con un navegador compatible y, si no lo encuentra, usa el navegador por defecto.
 
-Si prefieres un acceso gráfico, puedes instalar [Senderman APP](senderman-app.desktop) o [Senderman Tools](senderman-tools.desktop) en el escritorio o en el menú de aplicaciones.
+Si prefieres un acceso gráfico, instala el acceso [Senderman](senderman.desktop) en el escritorio o en el menú de aplicaciones.
+Si prefieres un acceso gráfico, instala el acceso [Senderman](senderman.desktop) en el escritorio o en el menú de aplicaciones.
 
 ## Checklist final
 
