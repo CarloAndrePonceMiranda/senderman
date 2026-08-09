@@ -783,8 +783,10 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
 
     quota_applied = _apply_user_quota(username, quota_bytes)
 
-    users.append(_default_user_record(username, write_enabled=False, home_dir=jail_root, public_key=normalized_public_key, quota_bytes=quota_bytes))
-    _save_user_registry(users)
+    with _open_registry_db() as conn:
+        _ensure_registry_db(conn)
+        _upsert_user_record(conn, _default_user_record(username, write_enabled=False, home_dir=jail_root, public_key=normalized_public_key, quota_bytes=quota_bytes))
+        conn.commit()
     return {"ok": True, "user": username, "private_key": private_key, "public_key": normalized_public_key, "quota_bytes": quota_bytes, "quota_applied": quota_applied}
 
 
