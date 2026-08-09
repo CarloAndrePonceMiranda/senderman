@@ -8,6 +8,8 @@ import subprocess
 import sqlite3
 import shutil
 import tempfile
+import ipaddress
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -48,6 +50,10 @@ USER_REGISTRY_DB = Path(__file__).parent / "senderman_registry.sqlite3"
 LEGACY_USER_REGISTRY_FILE = Path(__file__).parent / "users.json"
 USERADD_BIN = "/usr/sbin/useradd"
 CHPASSWD_BIN = "/usr/sbin/chpasswd"
+APP_ROOT = Path(__file__).parent
+SFTP_GROUP = "senderman-sftp"
+SFTP_ROOT_DIR = Path(os.getenv("SFTP_ROOT_DIR", "/srv/senderman-sftp"))
+SFTP_UPLOAD_DIRNAME = "upload"
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Senderman FTP Admin")
@@ -108,6 +114,231 @@ def _normalize_upload_relative_path(filename: str) -> Path:
     return Path(*parts)
 
 
+def _user_home_dir(username: str) -> str:
+    rc, out, _ = run(["getent", "passwd", username])
+    if rc != 0 or not out:
+        raise HTTPException(status_code=404, detail="No se encontró el directorio del usuario")
+    fields = out.split(":")
+    if len(fields) < 6:
+        raise HTTPException(status_code=500, detail="No se pudo leer el directorio del usuario")
+    return fields[5]
+
+
+def _normalize_public_key_text(public_key_text: str) -> str:
+    allowed_prefixes = (
+        "ssh-ed25519 ",
+        "ssh-rsa ",
+        "ssh-dss ",
+        "ssh-ecdsa ",
+        "ecdsa-sha2-nistp256 ",
+        "ecdsa-sha2-nistp384 ",
+        "ecdsa-sha2-nistp521 ",
+        "sk-ssh-ed25519@openssh.com ",
+        "sk-ecdsa-sha2-nistp256@openssh.com ",
+    )
+    keys: list[str] = []
+    for line in public_key_text.splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.startswith("#"):
+            continue
+        if not candidate.startswith(allowed_prefixes):
+            raise HTTPException(status_code=400, detail="La clave SSH pública no tiene un formato válido")
+        parts = candidate.split()
+        if len(parts) < 2:
+            raise HTTPException(status_code=400, detail="La clave SSH pública no tiene un formato válido")
+        keys.append(candidate)
+
+    if not keys:
+        raise HTTPException(status_code=400, detail="Debes proporcionar una clave SSH pública")
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(key)
+    return "\n".join(deduped)
+
+
+def _parse_quota_bytes(quota_value: object) -> int:
+    if quota_value in (None, "", 0, "0"):
+        return 0
+    try:
+        parsed = int(quota_value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="La cuota debe ser un número entero de bytes")
+    if parsed < 0:
+        raise HTTPException(status_code=400, detail="La cuota no puede ser negativa")
+    return parsed
+
+
+def _quota_blocks(quota_bytes: int) -> int:
+    if quota_bytes <= 0:
+        return 0
+    return (quota_bytes + 1023) // 1024
+
+
+def _sftp_quota_mountpoint() -> str | None:
+    rc, out, _ = run(["findmnt", "-no", "TARGET", "--target", str(SFTP_ROOT_DIR)])
+    if rc != 0 or not out:
+        return None
+    return out.strip()
+
+
+def _apply_user_quota(username: str, quota_bytes: int) -> bool:
+    quota_tool = shutil.which("setquota")
+    mountpoint = _sftp_quota_mountpoint()
+    if not quota_tool or not mountpoint:
+        return False
+
+    blocks = _quota_blocks(quota_bytes)
+    if blocks <= 0:
+        code, _, err = run_sudo(["setquota", "-u", username, "0", "0", "0", "0", mountpoint], ADMIN_PASS)
+    else:
+        code, _, err = run_sudo(["setquota", "-u", username, str(blocks), str(blocks), "0", "0", mountpoint], ADMIN_PASS)
+
+    if code != 0:
+        return False
+    return True
+
+
+def _normalize_sftp_home_dir(username: str, home_dir: str | None = None) -> str:
+    base_dir = SFTP_ROOT_DIR.resolve()
+    desired = Path(home_dir.strip()) if home_dir else base_dir / username
+    if not desired.is_absolute():
+        raise HTTPException(status_code=400, detail="El directorio de inicio debe ser una ruta absoluta")
+
+    resolved = desired.resolve() if desired.exists() else Path(str(desired))
+    try:
+        resolved_relative = resolved.resolve().relative_to(base_dir)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"El directorio de inicio debe estar dentro de {base_dir}")
+
+    if len(resolved_relative.parts) != 1 or resolved_relative.parts[0] != username:
+        raise HTTPException(status_code=400, detail=f"El directorio de inicio debe ser {base_dir / username}")
+
+    return str(base_dir / username)
+
+
+def _default_sftp_jail(username: str) -> str:
+    return str(SFTP_ROOT_DIR / username)
+
+
+def _prepare_sftp_jail(username: str, jail_root: str | None = None) -> str:
+    jail_path = Path(_normalize_sftp_home_dir(username, jail_root))
+    upload_dir = jail_path / SFTP_UPLOAD_DIRNAME
+    ssh_dir = jail_path / ".ssh"
+
+    run_sudo(["install", "-d", "-m", "755", "-o", "root", "-g", "root", str(SFTP_ROOT_DIR)], ADMIN_PASS)
+    run_sudo(["install", "-d", "-m", "755", "-o", "root", "-g", "root", str(jail_path)], ADMIN_PASS)
+    run_sudo(["install", "-d", "-m", "750", "-o", username, "-g", SFTP_GROUP, str(upload_dir)], ADMIN_PASS)
+    run_sudo(["install", "-d", "-m", "700", "-o", "root", "-g", "root", str(ssh_dir)], ADMIN_PASS)
+    return str(jail_path)
+
+
+def _install_public_key(username: str, public_key_text: str) -> None:
+    home_dir = Path(_user_home_dir(username))
+    ssh_dir = home_dir / ".ssh"
+    authorized_keys = ssh_dir / "authorized_keys"
+    normalized = _normalize_public_key_text(public_key_text)
+
+    run_sudo(["install", "-d", "-m", "700", "-o", "root", "-g", "root", str(ssh_dir)], ADMIN_PASS)
+    with tempfile.NamedTemporaryFile("w", delete=False) as handle:
+        handle.write(normalized + "\n")
+        temp_path = handle.name
+
+    try:
+        run_sudo(["install", "-m", "600", "-o", "root", "-g", "root", temp_path, str(authorized_keys)], ADMIN_PASS)
+    finally:
+        Path(temp_path).unlink(missing_ok=True)
+
+
+def _ensure_sftp_group_membership(username: str) -> None:
+    code, _, err = run_sudo(["usermod", "-aG", SFTP_GROUP, username], ADMIN_PASS)
+    if code != 0:
+        raise HTTPException(status_code=500, detail=err or "No se pudo asignar el grupo SFTP")
+
+
+def _move_sftp_jail(old_username: str, new_username: str) -> str:
+    old_jail = Path(SFTP_ROOT_DIR) / old_username
+    new_jail = Path(SFTP_ROOT_DIR) / new_username
+    if old_jail.exists() and old_jail != new_jail:
+        code, _, err = run_sudo(["mv", str(old_jail), str(new_jail)], ADMIN_PASS)
+        if code != 0:
+            raise HTTPException(status_code=500, detail=err or "No se pudo mover el jail SFTP")
+    return _prepare_sftp_jail(new_username, str(new_jail))
+
+
+def _remove_sftp_jail(username: str) -> None:
+    jail_root = Path(SFTP_ROOT_DIR) / username
+    if jail_root.exists():
+        code, _, err = run_sudo(["rm", "-rf", str(jail_root)], ADMIN_PASS)
+        if code != 0:
+            raise HTTPException(status_code=500, detail=err or "No se pudo eliminar el jail SFTP")
+
+
+def _generate_keypair(username: str) -> tuple[str, str]:
+    with tempfile.TemporaryDirectory(prefix=f"senderman-{username}-") as temp_dir:
+        key_path = Path(temp_dir) / f"{username}-sftp"
+        proc = subprocess.run(
+            [
+                "ssh-keygen",
+                "-q",
+                "-t",
+                "ed25519",
+                "-N",
+                "",
+                "-C",
+                f"{username}@senderman",
+                "-f",
+                str(key_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise HTTPException(status_code=500, detail=proc.stderr.strip() or "No se pudo generar la clave SSH")
+
+        private_key = key_path.read_text()
+        public_key = key_path.with_suffix(".pub").read_text().strip()
+        return private_key, public_key
+
+
+def get_current_release_tag() -> str:
+    release_file = APP_ROOT / ".senderman-release"
+    if not release_file.exists():
+        return ""
+    return release_file.read_text().strip()
+
+
+def get_maintenance_state() -> dict:
+    return {
+        "installed": (APP_ROOT / ".senderman-installed").exists(),
+        "release": get_current_release_tag(),
+        "install_root": str(INSTALL_ROOT),
+        "files_dir": str(FILES_DIR),
+        "panel_log_exists": (APP_ROOT / "panel.log").exists(),
+        "service": get_service_status(),
+    }
+
+
+async def run_maintenance_command(args: list[str]) -> dict:
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        cwd=str(APP_ROOT),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    return {
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": stdout.decode("utf-8", errors="replace").strip(),
+        "stderr": stderr.decode("utf-8", errors="replace").strip(),
+    }
+
+
 def get_service_status() -> dict:
     _, out, _ = run(["systemctl", "is-active", "vsftpd"])
     return {"active": out == "active", "status": out}
@@ -121,17 +352,65 @@ def get_write_enabled() -> bool:
         return False
 
 
+def _read_vsftpd_config() -> str:
+    try:
+        return Path(VSFTPD_CONF).read_text()
+    except OSError:
+        return ""
+
+
+def _vsftpd_value(config: str, key: str, default: str = "") -> str:
+    match = re.search(rf"^\s*{re.escape(key)}\s*=\s*(.*?)\s*$", config, re.MULTILINE)
+    return match.group(1) if match else default
+
+
+def get_ftp_network_config() -> dict:
+    config = _read_vsftpd_config()
+    try:
+        detected_public_ip = urllib.request.urlopen("https://api.ipify.org", timeout=3).read().decode().strip()
+        ipaddress.ip_address(detected_public_ip)
+    except Exception:
+        detected_public_ip = ""
+
+    return {
+        "config_path": VSFTPD_CONF,
+        "public_ip": _vsftpd_value(config, "pasv_address"),
+        "detected_public_ip": detected_public_ip,
+        "control_port": int(_vsftpd_value(config, "listen_port", "21") or "21"),
+        "passive_min_port": int(_vsftpd_value(config, "pasv_min_port", "40404") or "40404"),
+        "passive_max_port": int(_vsftpd_value(config, "pasv_max_port", "40404") or "40404"),
+    }
+
+
+def _set_vsftpd_values(config: str, values: dict[str, str]) -> str:
+    updated = config
+    for key, value in values.items():
+        pattern = rf"^\s*{re.escape(key)}\s*=.*$"
+        replacement = f"{key}={value}"
+        if re.search(pattern, updated, re.MULTILINE):
+            updated = re.sub(pattern, replacement, updated, flags=re.MULTILINE)
+        else:
+            updated = updated.rstrip() + f"\n{replacement}\n"
+    return updated
+
+
 def _default_user_record(
     username: str,
     *,
     locked: bool | None = None,
     write_enabled: bool | None = None,
+    home_dir: str | None = None,
+    public_key: str = "",
+    quota_bytes: int | None = None,
     protocol: str = "SFTP",
 ) -> dict:
     return {
         "username": username,
         "locked": get_user_locked(username) if locked is None else locked,
         "write_enabled": get_write_enabled() if write_enabled is None else write_enabled,
+        "home_dir": _user_home_dir(username) if home_dir is None and _user_exists(username) else (home_dir or ""),
+        "public_key": public_key,
+        "quota_bytes": 0 if quota_bytes is None else quota_bytes,
         "protocol": protocol,
     }
 
@@ -147,6 +426,9 @@ def _row_to_user(row: sqlite3.Row) -> dict:
         "username": row["username"],
         "locked": bool(row["locked"]),
         "write_enabled": bool(row["write_enabled"]),
+        "home_dir": row["home_dir"],
+        "public_key": row["public_key"],
+        "quota_bytes": int(row["quota_bytes"] or 0),
         "protocol": row["protocol"],
     }
 
@@ -174,6 +456,9 @@ def _legacy_user_registry_records() -> list[dict]:
             "username": username,
             "locked": bool(item.get("locked", get_user_locked(username))),
             "write_enabled": bool(item.get("write_enabled", get_write_enabled() if username == FTP_USER else False)),
+            "home_dir": str(item.get("home_dir", _user_home_dir(username) if _user_exists(username) else "")),
+            "public_key": str(item.get("public_key", "")),
+            "quota_bytes": _parse_quota_bytes(item.get("quota_bytes", 0)),
             "protocol": item.get("protocol", "SFTP"),
         })
     return normalized
@@ -186,26 +471,42 @@ def _ensure_registry_db(conn: sqlite3.Connection) -> None:
             username TEXT PRIMARY KEY,
             locked INTEGER NOT NULL,
             write_enabled INTEGER NOT NULL,
+            home_dir TEXT NOT NULL DEFAULT '',
+            public_key TEXT NOT NULL DEFAULT '',
+            quota_bytes INTEGER NOT NULL DEFAULT 0,
             protocol TEXT NOT NULL
         )
         """
     )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(user_registry)").fetchall()}
+    if "home_dir" not in columns:
+        conn.execute("ALTER TABLE user_registry ADD COLUMN home_dir TEXT NOT NULL DEFAULT ''")
+    if "public_key" not in columns:
+        conn.execute("ALTER TABLE user_registry ADD COLUMN public_key TEXT NOT NULL DEFAULT ''")
+    if "quota_bytes" not in columns:
+        conn.execute("ALTER TABLE user_registry ADD COLUMN quota_bytes INTEGER NOT NULL DEFAULT 0")
     count = conn.execute("SELECT COUNT(*) FROM user_registry").fetchone()[0]
     if count == 0:
         for record in _legacy_user_registry_records():
             conn.execute(
                 """
-                INSERT INTO user_registry (username, locked, write_enabled, protocol)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_registry (username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(username) DO UPDATE SET
                     locked = excluded.locked,
                     write_enabled = excluded.write_enabled,
+                    home_dir = excluded.home_dir,
+                    public_key = excluded.public_key,
+                    quota_bytes = excluded.quota_bytes,
                     protocol = excluded.protocol
                 """,
                 (
                     record["username"],
                     int(bool(record["locked"])),
                     int(bool(record["write_enabled"])),
+                    record["home_dir"],
+                    record["public_key"],
+                    int(record.get("quota_bytes", 0) or 0),
                     record["protocol"],
                 ),
             )
@@ -217,13 +518,16 @@ def _ensure_registry_db(conn: sqlite3.Connection) -> None:
         default_record = _default_user_record(FTP_USER)
         conn.execute(
             """
-            INSERT INTO user_registry (username, locked, write_enabled, protocol)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO user_registry (username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 default_record["username"],
                 int(bool(default_record["locked"])),
                 int(bool(default_record["write_enabled"])),
+                default_record["home_dir"],
+                default_record["public_key"],
+                int(default_record.get("quota_bytes", 0) or 0),
                 default_record["protocol"],
             ),
         )
@@ -233,17 +537,23 @@ def _ensure_registry_db(conn: sqlite3.Connection) -> None:
 def _upsert_user_record(conn: sqlite3.Connection, user: dict) -> None:
     conn.execute(
         """
-        INSERT INTO user_registry (username, locked, write_enabled, protocol)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO user_registry (username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             locked = excluded.locked,
             write_enabled = excluded.write_enabled,
+            home_dir = excluded.home_dir,
+            public_key = excluded.public_key,
+            quota_bytes = excluded.quota_bytes,
             protocol = excluded.protocol
         """,
         (
             user["username"],
             int(bool(user["locked"])),
             int(bool(user["write_enabled"])),
+            user.get("home_dir", ""),
+            user.get("public_key", ""),
+            int(user.get("quota_bytes", 0) or 0),
             user.get("protocol", "SFTP"),
         ),
     )
@@ -254,7 +564,7 @@ def get_user_registry() -> list[dict]:
         _ensure_registry_db(conn)
         rows = conn.execute(
             """
-            SELECT username, locked, write_enabled, protocol
+            SELECT username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol
             FROM user_registry
             ORDER BY CASE WHEN username = ? THEN 0 ELSE 1 END, username
             """,
@@ -272,7 +582,7 @@ def _update_user_registry(username: str, updater) -> list[dict]:
     with _open_registry_db() as conn:
         _ensure_registry_db(conn)
         row = conn.execute(
-            "SELECT username, locked, write_enabled, protocol FROM user_registry WHERE username = ?",
+            "SELECT username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol FROM user_registry WHERE username = ?",
             (username,),
         ).fetchone()
         current = _row_to_user(row) if row is not None else _default_user_record(username, write_enabled=False)
@@ -280,6 +590,13 @@ def _update_user_registry(username: str, updater) -> list[dict]:
         _upsert_user_record(conn, updated)
         conn.commit()
     return get_user_registry()
+
+
+def _delete_user_registry(username: str) -> None:
+    with _open_registry_db() as conn:
+        _ensure_registry_db(conn)
+        conn.execute("DELETE FROM user_registry WHERE username = ?", (username,))
+        conn.commit()
 
 
 def _active_peer_ips(port: int) -> set[str]:
@@ -393,12 +710,29 @@ async def api_status(_: str = Depends(verify)):
         "connected_users": get_connected_users(),
         "user_locked": get_user_locked(FTP_USER),
         "users": get_user_registry(),
+        "maintenance": get_maintenance_state(),
     }
 
 
 @app.get("/api/users")
 async def api_users(_: str = Depends(verify)):
     return {"users": get_user_registry()}
+
+
+@app.get("/api/users/{username}")
+async def api_user_detail(username: str, _: str = Depends(verify)):
+    users = get_user_registry()
+    user = next((item for item in users if item["username"] == username), None)
+    if user is None and not _user_exists(username):
+        raise HTTPException(status_code=404, detail="El usuario no existe")
+
+    if user is None:
+        user = _default_user_record(username, locked=get_user_locked(username), write_enabled=False)
+
+    return {
+        **user,
+        "home_dir": user.get("home_dir") or (_user_home_dir(username) if _user_exists(username) else ""),
+    }
 
 
 @app.post("/api/users/create")
@@ -409,12 +743,16 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
         raise HTTPException(status_code=400, detail="JSON inválido")
 
     username = str(payload.get("username", "")).strip()
-    password = str(payload.get("password", "")).strip()
+    public_key = str(payload.get("public_key", "")).strip()
+    generate_keypair = bool(payload.get("generate_keypair", True))
+    home_dir = str(payload.get("home_dir", "")).strip()
+    quota_bytes = _parse_quota_bytes(payload.get("quota_bytes", 0))
 
     if not username or not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", username):
         raise HTTPException(status_code=400, detail="Nombre de usuario inválido")
-    if len(password) < 8:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+
+    if home_dir and not Path(home_dir).is_absolute():
+        raise HTTPException(status_code=400, detail="El directorio de inicio debe ser una ruta absoluta")
 
     users = get_user_registry()
     if any(user["username"] == username for user in users):
@@ -422,27 +760,34 @@ async def api_create_user(request: Request, _: str = Depends(verify)):
     if _user_exists(username):
         raise HTTPException(status_code=409, detail="El usuario ya existe en el sistema")
 
-    code, _, err = run_sudo([
-        USERADD_BIN,
-        "-m",
-        "-s", "/usr/sbin/nologin",
-        username,
-    ], ADMIN_PASS)
+    jail_root = _normalize_sftp_home_dir(username, home_dir)
+    useradd_command = [USERADD_BIN, "-M", "-d", jail_root, "-s", "/usr/sbin/nologin", username]
+
+    code, _, err = run_sudo(useradd_command, ADMIN_PASS)
     if code != 0:
         raise HTTPException(status_code=500, detail=err or "No se pudo crear el usuario en el sistema")
 
-    proc = subprocess.run(
-        ["sudo", "-S", "-p", "", CHPASSWD_BIN],
-        input=f"{ADMIN_PASS}\n{username}:{password}\n",
-        text=True,
-        capture_output=True,
-    )
-    if proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=proc.stderr.strip() or "No se pudo establecer la contraseña")
+    _ensure_sftp_group_membership(username)
+    jail_root = _prepare_sftp_jail(username, jail_root)
 
-    users.append(_default_user_record(username, write_enabled=False))
-    _save_user_registry(users)
-    return {"ok": True, "user": username}
+    private_key = ""
+    normalized_public_key = ""
+    if public_key:
+        normalized_public_key = _normalize_public_key_text(public_key)
+        _install_public_key(username, normalized_public_key)
+    elif generate_keypair:
+        private_key, normalized_public_key = _generate_keypair(username)
+        _install_public_key(username, normalized_public_key)
+    else:
+        raise HTTPException(status_code=400, detail="Debes proporcionar una clave pública o pedir que el panel genere una")
+
+    quota_applied = _apply_user_quota(username, quota_bytes)
+
+    with _open_registry_db() as conn:
+        _ensure_registry_db(conn)
+        _upsert_user_record(conn, _default_user_record(username, write_enabled=False, home_dir=jail_root, public_key=normalized_public_key, quota_bytes=quota_bytes))
+        conn.commit()
+    return {"ok": True, "user": username, "private_key": private_key, "public_key": normalized_public_key, "quota_bytes": quota_bytes, "quota_applied": quota_applied}
 
 
 @app.post("/api/users/register")
@@ -463,9 +808,159 @@ async def api_register_user(request: Request, _: str = Depends(verify)):
     if not _user_exists(username):
         raise HTTPException(status_code=404, detail="El usuario no existe en el sistema")
 
-    users.append(_default_user_record(username, write_enabled=False))
+    _ensure_sftp_group_membership(username)
+    jail_root = _prepare_sftp_jail(username)
+
+    users.append(_default_user_record(username, write_enabled=False, home_dir=jail_root, quota_bytes=0))
     _save_user_registry(users)
     return {"ok": True, "user": username}
+
+
+@app.put("/api/users/{username}")
+async def api_update_user(username: str, request: Request, _: str = Depends(verify)):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="JSON inválido")
+
+    if username == FTP_USER:
+        raise HTTPException(status_code=400, detail="El usuario principal no se puede editar desde este formulario")
+
+    new_username = str(payload.get("new_username", username)).strip() or username
+    home_dir = str(payload.get("home_dir", "")).strip()
+    public_key = str(payload.get("public_key", "")).strip()
+    quota_bytes = _parse_quota_bytes(payload.get("quota_bytes", 0))
+    locked = payload.get("locked")
+    write_enabled = payload.get("write_enabled")
+
+    if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", new_username):
+        raise HTTPException(status_code=400, detail="Nombre de usuario inválido")
+    jail_root = _normalize_sftp_home_dir(new_username, home_dir or None)
+
+    users = get_user_registry()
+    current = next((user for user in users if user["username"] == username), None)
+    if current is None and not _user_exists(username):
+        raise HTTPException(status_code=404, detail="El usuario no existe")
+    if new_username != username and any(user["username"] == new_username for user in users):
+        raise HTTPException(status_code=409, detail="El nombre de usuario ya existe en el panel")
+    if new_username != username and _user_exists(new_username):
+        raise HTTPException(status_code=409, detail="El nombre de usuario ya existe en el sistema")
+
+    rename_required = new_username != username
+    if rename_required:
+        rename_command = ["usermod", "-l", new_username, "-d", jail_root, username]
+        code, _, err = run_sudo(rename_command, ADMIN_PASS)
+        if code != 0:
+            raise HTTPException(status_code=500, detail=err or "No se pudo renombrar el usuario")
+        registry_username = new_username
+        jail_root = _move_sftp_jail(username, new_username)
+    else:
+        registry_username = username
+        code, _, err = run_sudo(["usermod", "-d", jail_root, username], ADMIN_PASS)
+        if code != 0:
+            raise HTTPException(status_code=500, detail=err or "No se pudo cambiar el directorio de inicio")
+        jail_root = _prepare_sftp_jail(registry_username, jail_root)
+
+    _ensure_sftp_group_membership(registry_username)
+
+    if public_key:
+        normalized_public_key = _normalize_public_key_text(public_key)
+        _install_public_key(registry_username, normalized_public_key)
+    else:
+        normalized_public_key = current["public_key"] if current is not None else ""
+
+    if locked is not None:
+        desired_locked = bool(locked)
+        lock_command = ["usermod", "-L" if desired_locked else "-U", registry_username]
+        code, _, err = run_sudo(lock_command, ADMIN_PASS)
+        if code != 0:
+            raise HTTPException(status_code=500, detail=err or "No se pudo cambiar el estado del usuario")
+
+    if write_enabled is not None:
+        desired_write = bool(write_enabled)
+        def updater(item: dict) -> dict:
+            item["write_enabled"] = desired_write
+            item["home_dir"] = jail_root
+            item["public_key"] = normalized_public_key
+            item["quota_bytes"] = quota_bytes
+            return item
+
+        _update_user_registry(registry_username, updater)
+    else:
+        def updater(item: dict) -> dict:
+            item["home_dir"] = jail_root
+            item["public_key"] = normalized_public_key
+            item["quota_bytes"] = quota_bytes
+            return item
+
+        _update_user_registry(registry_username, updater)
+
+    quota_applied = _apply_user_quota(registry_username, quota_bytes)
+
+    if rename_required and registry_username != username:
+        _delete_user_registry(username)
+
+    return {"ok": True, "username": registry_username, "quota_bytes": quota_bytes, "quota_applied": quota_applied}
+
+
+@app.delete("/api/users/{username}")
+async def api_delete_user(username: str, remove_home: bool = True, _: str = Depends(verify)):
+    if username == FTP_USER:
+        raise HTTPException(status_code=400, detail="El usuario principal no se puede eliminar desde el panel")
+    if not _user_exists(username):
+        raise HTTPException(status_code=404, detail="El usuario no existe en el sistema")
+
+    command = ["sudo", "userdel"]
+    if remove_home:
+        command.append("-r")
+    command.append(username)
+    code, _, err = run_sudo(command[1:], ADMIN_PASS)
+    if code != 0:
+        raise HTTPException(status_code=500, detail=err or "No se pudo eliminar el usuario")
+
+    if remove_home:
+        _remove_sftp_jail(username)
+    _delete_user_registry(username)
+    return {"ok": True, "username": username}
+
+
+@app.get("/api/users/{username}/keys")
+async def api_user_keys(username: str, _: str = Depends(verify)):
+    users = get_user_registry()
+    user = next((item for item in users if item["username"] == username), None)
+    if user is None and not _user_exists(username):
+        raise HTTPException(status_code=404, detail="El usuario no existe")
+    if user is None:
+        user = _default_user_record(username, locked=get_user_locked(username), write_enabled=False)
+    return {"username": username, "public_key": user.get("public_key", "")}
+
+
+@app.post("/api/users/{username}/keys")
+async def api_set_user_key(username: str, request: Request, _: str = Depends(verify)):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="JSON inválido")
+
+    public_key = str(payload.get("public_key", "")).strip()
+    if not _user_exists(username):
+        raise HTTPException(status_code=404, detail="El usuario no existe")
+
+    normalized_public_key = _normalize_public_key_text(public_key)
+    _install_public_key(username, normalized_public_key)
+    _update_user_registry(username, lambda item: {**item, "public_key": normalized_public_key})
+    return {"ok": True, "username": username, "public_key": normalized_public_key}
+
+
+@app.post("/api/users/{username}/keys/generate")
+async def api_generate_user_key(username: str, _: str = Depends(verify)):
+    if not _user_exists(username):
+        raise HTTPException(status_code=404, detail="El usuario no existe")
+
+    private_key, public_key = _generate_keypair(username)
+    _install_public_key(username, public_key)
+    _update_user_registry(username, lambda item: {**item, "public_key": public_key})
+    return {"ok": True, "username": username, "private_key": private_key, "public_key": public_key}
 
 
 @app.post("/api/service/{action}")
@@ -476,6 +971,50 @@ async def api_service(action: str, _: str = Depends(verify)):
     if code != 0:
         raise HTTPException(status_code=500, detail=err)
     return {"ok": True, "action": action}
+
+
+@app.get("/api/ftp-config")
+async def api_ftp_config(_: str = Depends(verify)):
+    return get_ftp_network_config()
+
+
+@app.post("/api/ftp-config")
+async def api_update_ftp_config(request: Request, _: str = Depends(verify)):
+    payload = await request.json()
+    public_ip = str(payload.get("public_ip", "")).strip()
+    try:
+        ipaddress.ip_address(public_ip)
+        control_port = int(payload.get("control_port", 21))
+        passive_min_port = int(payload.get("passive_min_port", 40404))
+        passive_max_port = int(payload.get("passive_max_port", passive_min_port))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="IP o puerto inválido")
+
+    if not 1 <= control_port <= 65535:
+        raise HTTPException(status_code=400, detail="El puerto FTP debe estar entre 1 y 65535")
+    if not 1024 <= passive_min_port <= passive_max_port <= 65535:
+        raise HTTPException(status_code=400, detail="El rango pasivo debe estar entre 1024 y 65535")
+    if control_port in range(passive_min_port, passive_max_port + 1):
+        raise HTTPException(status_code=400, detail="El puerto FTP no puede estar dentro del rango pasivo")
+
+    config = _read_vsftpd_config()
+    if not config:
+        raise HTTPException(status_code=500, detail=f"No se pudo leer {VSFTPD_CONF}")
+
+    updated_config = _set_vsftpd_values(config, {
+        "listen_port": str(control_port),
+        "pasv_min_port": str(passive_min_port),
+        "pasv_max_port": str(passive_max_port),
+        "pasv_address": public_ip,
+    })
+    proc = subprocess.run(["sudo", "tee", VSFTPD_CONF], input=updated_config.encode(), capture_output=True)
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail=proc.stderr.decode(errors="replace").strip() or "No se pudo guardar la configuración")
+
+    code, _, err = run(["sudo", "systemctl", "restart", "vsftpd"])
+    if code != 0:
+        raise HTTPException(status_code=500, detail=err or "No se pudo reiniciar vsftpd")
+    return {"ok": True, "config": get_ftp_network_config()}
 
 
 @app.post("/api/write/{state}")
@@ -523,7 +1062,7 @@ async def api_user_action(username: str, action: str, _: str = Depends(verify)):
     if action not in ("lock", "unlock"):
         raise HTTPException(status_code=400)
     flag = "-L" if action == "lock" else "-U"
-    code, _, err = run(["sudo", "usermod", flag, username])
+    code, _, err = run_sudo(["usermod", flag, username], ADMIN_PASS)
     if code != 0:
         raise HTTPException(status_code=500, detail=err)
 
@@ -623,6 +1162,38 @@ async def api_files_upload(path: str = "", files: list[UploadFile] = File(...), 
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/maintenance")
+async def api_maintenance(_: str = Depends(verify)):
+    return get_maintenance_state()
+
+
+@app.post("/api/maintenance/install")
+async def api_maintenance_install(_: str = Depends(verify)):
+    result = await run_maintenance_command(["bash", "install.sh", "--service", "--latest-release", "--server"])
+    if not result["ok"]:
+        raise HTTPException(status_code=500, detail=result["stderr"] or result["stdout"] or "No se pudo completar la instalación")
+    return result
+
+
+@app.post("/api/maintenance/update")
+async def api_maintenance_update(_: str = Depends(verify)):
+    result = await run_maintenance_command(["bash", "tools/update.sh", "--latest-release"])
+    if not result["ok"]:
+        raise HTTPException(status_code=500, detail=result["stderr"] or result["stdout"] or "No se pudo completar la actualización")
+    return result
+
+
+@app.post("/api/maintenance/uninstall")
+async def api_maintenance_uninstall(keep_config: bool = True, _: str = Depends(verify)):
+    command = ["bash", "install.sh", "--uninstall"]
+    if keep_config:
+        command.append("--keep-config")
+    result = await run_maintenance_command(command)
+    if not result["ok"]:
+        raise HTTPException(status_code=500, detail=result["stderr"] or result["stdout"] or "No se pudo completar la desinstalación")
+    return result
 
 
 # ── WebSocket — log en tiempo real ─────────────────────────────────────────────

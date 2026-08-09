@@ -50,6 +50,30 @@ body > * {
   z-index: 1;
 }
 
+.uninstall-shutdown {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 12, .94);
+  text-align: center;
+}
+
+.uninstall-shutdown-panel {
+  width: min(92vw, 440px);
+  padding: 2.5rem;
+  border: 1px solid rgba(63, 185, 80, .35);
+  border-radius: 18px;
+  background: rgba(19, 24, 33, .92);
+  box-shadow: var(--glass-shadow);
+}
+
+.uninstall-shutdown-panel h1 {
+  margin: 1rem 0 .5rem;
+  font-size: 1.5rem;
+}
+
 .navbar-brand {
   font-weight: 700;
   letter-spacing: 1px;

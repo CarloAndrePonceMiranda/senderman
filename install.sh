@@ -9,6 +9,11 @@ cd "$repo_root"
 
 service_name="senderman-ftp-admin"
 service_user="mr-robot"
+sftp_group="senderman-sftp"
+sftp_root_dir="/srv/senderman-sftp"
+sftp_upload_dirname="upload"
+sftp_dropin_dir="/etc/ssh/sshd_config.d"
+sftp_dropin_file="$sftp_dropin_dir/99-senderman-sftp.conf"
 install_service=false
 force_overwrite=false
 release_mode="latest"
@@ -144,6 +149,190 @@ PY
   fi
   repo_root="$install_root"
   cd "$repo_root"
+}
+
+detect_ssh_service_name() {
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files 2>/dev/null | grep -q '^ssh\.service'; then
+      echo "ssh"
+      return 0
+    fi
+    if systemctl list-unit-files 2>/dev/null | grep -q '^sshd\.service'; then
+      echo "sshd"
+      return 0
+    fi
+  fi
+  echo "ssh"
+}
+
+sync_sftp_group_membership() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Aviso: sudo no está disponible; no se pudo sincronizar el grupo SFTP."
+    return 0
+  fi
+
+  python3 - "$repo_root" "$sftp_group" <<'PY'
+from __future__ import annotations
+
+import json
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+repo_root = Path(sys.argv[1])
+group_name = sys.argv[2]
+users: set[str] = set()
+
+db_path = repo_root / "senderman_registry.sqlite3"
+if db_path.exists():
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT username FROM user_registry").fetchall()
+            users.update(str(row[0]).strip() for row in rows if str(row[0]).strip())
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+legacy_json = repo_root / "users.json"
+if legacy_json.exists():
+    try:
+        raw = json.loads(legacy_json.read_text())
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    username = str(item.get("username", "")).strip()
+                    if username:
+                        users.add(username)
+    except Exception:
+        pass
+
+for username in sorted(users):
+    if subprocess.run(["id", "-u", username], capture_output=True, text=True).returncode != 0:
+        continue
+    subprocess.run(["sudo", "usermod", "-g", group_name, username], check=False)
+PY
+}
+
+ensure_sftp_user_jail() {
+  local username="$1"
+  local jail_root="$sftp_root_dir/$username"
+  local upload_dir="$jail_root/$sftp_upload_dirname"
+  local ssh_dir="$jail_root/.ssh"
+
+  if ! id -u "$username" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  sudo install -d -m 0755 -o root -g root "$sftp_root_dir"
+  sudo install -d -m 0755 -o root -g root "$jail_root"
+  sudo install -d -m 0750 -o "$username" -g "$sftp_group" "$upload_dir"
+  sudo install -d -m 0700 -o root -g root "$ssh_dir"
+}
+
+sync_sftp_jails() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Aviso: sudo no está disponible; no se pudieron sincronizar los jails SFTP."
+    return 0
+  fi
+
+  python3 - "$repo_root" <<'PY' | while IFS= read -r username; do
+from __future__ import annotations
+
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+repo_root = Path(sys.argv[1])
+users: set[str] = set()
+
+db_path = repo_root / "senderman_registry.sqlite3"
+if db_path.exists():
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT username FROM user_registry").fetchall()
+            users.update(str(row[0]).strip() for row in rows if str(row[0]).strip())
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+legacy_json = repo_root / "users.json"
+if legacy_json.exists():
+    try:
+        raw = json.loads(legacy_json.read_text())
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    username = str(item.get("username", "")).strip()
+                    if username:
+                        users.add(username)
+    except Exception:
+        pass
+
+for username in sorted(users):
+    print(username)
+PY
+    ensure_sftp_user_jail "$username"
+  done
+}
+
+install_sftp_daemon_config() {
+  local ssh_service
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Aviso: sudo no está disponible; no se pudo configurar sshd para SFTP."
+    return 0
+  fi
+
+  ssh_service="$(detect_ssh_service_name)"
+  sudo groupadd -f "$sftp_group"
+  sudo install -d -m 0755 "$sftp_dropin_dir"
+
+  cat <<EOF | sudo tee "$sftp_dropin_file" >/dev/null
+# Managed by Senderman
+Match Group $sftp_group
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthenticationMethods publickey
+    PermitTTY no
+    AllowTcpForwarding no
+    X11Forwarding no
+    ChrootDirectory $sftp_root_dir/%u
+    ForceCommand internal-sftp -d /$sftp_upload_dirname
+EOF
+
+  sudo chmod 644 "$sftp_dropin_file"
+
+  if command -v sshd >/dev/null 2>&1; then
+    if ! sudo sshd -t; then
+      echo "error: la configuración de sshd no pasó la validación"
+      exit 1
+    fi
+  fi
+
+  sudo systemctl try-restart "$ssh_service" >/dev/null 2>&1 || true
+  sync_sftp_group_membership
+  sync_sftp_jails
+  echo "Se configuró sshd para SFTP por clave en $sftp_dropin_file."
+}
+
+remove_sftp_daemon_config() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    return 0
+  fi
+
+  sudo rm -f "$sftp_dropin_file"
+  sudo rm -rf "$sftp_root_dir"
+  if command -v sshd >/dev/null 2>&1; then
+    sudo sshd -t >/dev/null 2>&1 || true
+  fi
+  sudo systemctl try-restart "$(detect_ssh_service_name)" >/dev/null 2>&1 || true
 }
 
 is_installed() {
@@ -300,7 +489,11 @@ launch_installer_menu() {
 
       case "$choice" in
         install)
-          run_installer_command --latest-release --server
+          local args=(--latest-release --server)
+          if $install_service; then
+            args=(--service "${args[@]}")
+          fi
+          run_installer_command "${args[@]}"
           read -r -p "Pulsa Enter para continuar..." _
           ;;
         exit)
@@ -416,8 +609,8 @@ install_app_icon() {
   raster_icons_dir="$icons_root/256x256/apps"
 
   mkdir -p "$scalable_icons_dir" "$raster_icons_dir"
-  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/senderman-ftp-admin.svg"
-  rm -f "$raster_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-tools.svg" "$raster_icons_dir/senderman-monitor.svg" "$raster_icons_dir/senderman-configuration.svg" "$raster_icons_dir/senderman-ftp-admin.png" "$raster_icons_dir/senderman-ftp-admin.svg"
+  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/senderman-ftp-admin.svg"
+  rm -f "$raster_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-shell.svg" "$raster_icons_dir/senderman-monitor.svg" "$raster_icons_dir/senderman-configuration.svg" "$raster_icons_dir/senderman-ftp-admin.png" "$raster_icons_dir/senderman-ftp-admin.svg"
 
   cat > "$scalable_icons_dir/senderman-app.svg" <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Senderman APP">
@@ -458,28 +651,25 @@ EOF
 EOF
 
   cp "$scalable_icons_dir/senderman-app.svg" "$raster_icons_dir/senderman-app.svg"
-  cp "$scalable_icons_dir/senderman-tools.svg" "$raster_icons_dir/senderman-tools.svg"
 }
 
 install_desktop_shortcuts() {
   local applications_dir
   local icons_root
   local app_icon_path
-  local tools_icon_path
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   icons_root="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
   app_icon_path="$icons_root/senderman-app.svg"
-  tools_icon_path="$icons_root/senderman-tools.svg"
 
   mkdir -p "$applications_dir"
   install_app_icon
 
-  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-menu.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-menu.desktop" "$applications_dir/sftp-menu.desktop"
 
-  cat > "$applications_dir/senderman-app.desktop" <<EOF
+  cat > "$applications_dir/senderman.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Senderman APP
+Name=Senderman
 Comment=Abre la aplicación web de Senderman
 Exec=/usr/bin/bash "$repo_root/tools/app.sh"
 TryExec=/usr/bin/bash
@@ -490,21 +680,8 @@ StartupNotify=true
 StartupWMClass=SendermanAPP
 EOF
 
-  cat > "$applications_dir/senderman-tools.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Senderman Tools
-Comment=Abre el instalador y menú de Senderman
-Exec=/usr/bin/bash -lc 'if command -v gnome-terminal >/dev/null 2>&1; then gnome-terminal --full-screen -- bash "$repo_root/install.sh"; elif command -v konsole >/dev/null 2>&1; then konsole --fullscreen -e bash "$repo_root/install.sh"; elif command -v xterm >/dev/null 2>&1; then xterm -fullscreen -e bash "$repo_root/install.sh"; else bash "$repo_root/install.sh"; fi'
-TryExec=/usr/bin/bash
-Icon=$tools_icon_path
-Terminal=true
-Categories=Network;System;Utility;
-StartupNotify=true
-EOF
-
-  chmod 644 "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop"
-  echo "Se instalaron los accesos directos en $applications_dir."
+  chmod 644 "$applications_dir/senderman.desktop"
+  echo "Se instaló el acceso directo principal en $applications_dir."
 }
 
 install_console_launchers() {
@@ -571,9 +748,9 @@ remove_desktop_shortcuts() {
   icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
   scalable_icons_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 
-  rm -f "$applications_dir/senderman-menu.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
-  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
-  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/sftp-matrix.svg"
+  rm -f "$applications_dir/senderman-menu.desktop" "$applications_dir/senderman.desktop" "$applications_dir/senderman-app.desktop" "$applications_dir/senderman-tools.desktop" "$applications_dir/senderman-shell.desktop" "$applications_dir/senderman-ftp-admin-monitor.desktop" "$applications_dir/senderman-ftp-admin-shell.desktop" "$applications_dir/senderman-ftp-admin-configuration.desktop" "$applications_dir/senderman-ftp-admin.desktop" "$applications_dir/senderman-ftp-admin-menu.desktop" "$applications_dir/sftp-menu.desktop"
+  rm -f "$icons_dir/senderman-app.svg" "$icons_dir/senderman-shell.svg" "$icons_dir/senderman-tools.svg" "$icons_dir/senderman-monitor.svg" "$icons_dir/senderman-configuration.svg" "$icons_dir/senderman-ftp-admin.svg" "$icons_dir/senderman-ftp-admin.png" "$icons_dir/sftp-matrix.svg"
+  rm -f "$scalable_icons_dir/senderman-app.svg" "$scalable_icons_dir/senderman-shell.svg" "$scalable_icons_dir/senderman-tools.svg" "$scalable_icons_dir/senderman-monitor.svg" "$scalable_icons_dir/senderman-configuration.svg" "$scalable_icons_dir/senderman-ftp-admin.svg" "$scalable_icons_dir/senderman-ftp-admin.png" "$scalable_icons_dir/sftp-matrix.svg"
 }
 
 uninstall_application() {
@@ -581,6 +758,9 @@ uninstall_application() {
 
   remove_console_launchers
   remove_desktop_shortcuts
+  if ! $uninstall_keep_config; then
+    remove_sftp_daemon_config
+  fi
 
   if command -v sudo >/dev/null 2>&1; then
     if systemctl list-unit-files | grep -q '^senderman-ftp-admin\.service'; then
@@ -1060,8 +1240,6 @@ if [ "$install_profile" = "uninstall" ]; then
   exit 0
 fi
 
-sync_install_root
-
 if [ "$install_profile" != "client" ]; then
   if ! python3 -c 'import venv' >/dev/null 2>&1; then
     echo "error: python3-venv no está instalado"
@@ -1118,6 +1296,8 @@ else
   cp .env.example .env
   chmod 600 .env
   set_env_value "FILES_DIR" "$install_root/files"
+  set_env_value "VSFTPD_CONF" "/etc/vsftpd.conf"
+  set_env_value "SFTP_ROOT_DIR" "$sftp_root_dir"
   echo "Se creó .env desde .env.example con permisos 600."
 fi
 
@@ -1141,10 +1321,6 @@ elif [ -z "$current_admin_pass" ] || [ "$current_admin_pass" = "ChangeMe123!" ];
     echo "Guárdalo ahora: $admin_pass"
   fi
   set_env_value "ADMIN_PASS" "$admin_pass"
-fi
-
-if command -v sudo >/dev/null 2>&1; then
-  printf '%s:%s\n' "$service_user" "$admin_pass" | sudo chpasswd
 fi
 
 echo
@@ -1184,6 +1360,7 @@ EOF
 fi
 
 install_sudoers_rules
+install_sftp_daemon_config
 
 install_desktop_shortcuts
 install_console_launchers

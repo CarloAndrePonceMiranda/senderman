@@ -11,6 +11,13 @@
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>
 <body data-theme="dark">
+<div id="uninstall-shutdown" class="uninstall-shutdown d-none" role="status" aria-live="polite">
+  <div class="uninstall-shutdown-panel">
+    <i class="bi bi-check2-circle text-success fs-1"></i>
+    <h1>Senderman desinstalado</h1>
+    <p>La ventana se cerrará en <strong id="uninstall-countdown">10</strong> segundos.</p>
+  </div>
+</div>
 
 <header>
   <nav class="navbar navbar-dark px-4 py-2 glass-panel mx-3 mt-3">
@@ -92,6 +99,11 @@
             <i class="bi bi-folder2-open me-1"></i>Archivos
           </button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link px-4" type="button" data-tab="maintenance">
+            <i class="bi bi-hammer me-1"></i>Mantenimiento
+          </button>
+        </li>
       </ul>
     </div>
     <div class="card-body">
@@ -149,11 +161,12 @@
                           <th>Usuario</th>
                           <th>Estado</th>
                           <th>Escritura</th>
+                          <th class="text-end">Acciones</th>
                         </tr>
                       </thead>
                       <tbody id="users-registry-tbody">
                         <tr>
-                          <td colspan="3" class="text-center text-secondary py-4">
+                          <td colspan="4" class="text-center text-secondary py-4">
                             <i class="bi bi-people fs-3 d-block mb-2"></i>Cargando usuarios...
                           </td>
                         </tr>
@@ -226,6 +239,103 @@
             </div>
           </div>
 
+          <!-- Tab: mantenimiento -->
+          <div id="tab-maintenance" class="d-none">
+            <div class="row g-3">
+              <div class="col-12 col-lg-4">
+                <div class="card h-100">
+                  <div class="card-header py-2 px-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-info-circle text-info"></i>
+                    <span class="fw-semibold">Estado del sistema</span>
+                  </div>
+                  <div class="card-body d-grid gap-2">
+                    <div class="maintenance-row"><span class="text-secondary">Instalado</span><span id="maintenance-installed" class="fw-semibold">—</span></div>
+                    <div class="maintenance-row"><span class="text-secondary">Release</span><span id="maintenance-release" class="fw-semibold">—</span></div>
+                    <div class="maintenance-row"><span class="text-secondary">Ruta</span><span id="maintenance-root" class="fw-semibold text-truncate">—</span></div>
+                    <div class="maintenance-row"><span class="text-secondary">Servicio</span><span id="maintenance-service" class="fw-semibold">—</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-12 col-lg-8">
+                <div class="card h-100">
+                  <div class="card-header py-2 px-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-lightning-charge text-warning"></i>
+                    <span class="fw-semibold">Acciones</span>
+                  </div>
+                  <div class="card-body d-grid gap-3">
+                    <div class="d-flex flex-wrap gap-2">
+                      <button class="btn btn-action service-btn px-4" type="button" data-action="maintenance-install">
+                        <i class="bi bi-download me-1"></i>Instalar
+                      </button>
+                      <button class="btn btn-action service-btn px-4" type="button" data-action="maintenance-update">
+                        <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+                      </button>
+                      <button class="btn btn-outline-secondary btn-action px-4" type="button" data-action="go-monitor">
+                        <i class="bi bi-activity me-1"></i>Ver monitor
+                      </button>
+                    </div>
+
+                    <div class="border-top pt-3">
+                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                          <div class="fw-semibold text-danger">Desinstalar</div>
+                          <div class="small text-secondary">Elige si conservar la configuración local antes de continuar.</div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                          <label class="form-check-label small text-secondary" for="maintenance-keep-config">Conservar config</label>
+                          <input class="form-check-input" type="checkbox" id="maintenance-keep-config" checked />
+                          <button class="btn btn-outline-danger btn-action px-4" type="button" data-action="maintenance-uninstall">
+                            <i class="bi bi-trash3 me-1"></i>Desinstalar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="small text-secondary">
+                      Los comandos de mantenimiento se ejecutan con acciones fijas desde el panel; no hay ejecución libre de shell.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-12">
+                <div class="card">
+                  <div class="card-header py-2 px-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-router text-primary"></i>
+                    <span class="fw-semibold">Conectividad FTP externa</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                      <div class="col-12 col-md-4">
+                        <label for="ftp-public-ip" class="form-label small text-secondary">IP pública anunciada</label>
+                        <input id="ftp-public-ip" class="form-control" placeholder="189.242.5.165" inputmode="decimal" />
+                        <div id="ftp-detected-ip" class="form-text">Detectando IP pública...</div>
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <label for="ftp-control-port" class="form-label small text-secondary">Puerto FTP</label>
+                        <input id="ftp-control-port" class="form-control" type="number" min="1" max="65535" />
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <label for="ftp-passive-min" class="form-label small text-secondary">Pasivo desde</label>
+                        <input id="ftp-passive-min" class="form-control" type="number" min="1024" max="65535" />
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <label for="ftp-passive-max" class="form-label small text-secondary">Pasivo hasta</label>
+                        <input id="ftp-passive-max" class="form-control" type="number" min="1024" max="65535" />
+                      </div>
+                      <div class="col-6 col-md-2">
+                        <button class="btn btn-action w-100" type="button" data-action="save-ftp-config"><i class="bi bi-save me-1"></i>Aplicar</button>
+                      </div>
+                    </div>
+                    <div class="small text-secondary mt-3">La app puede configurar este servidor y reiniciar vsftpd. En el router debes reenviar TCP al equipo servidor: el puerto FTP y el rango pasivo. Si usas SFTP, reenvía solo TCP 22.</div>
+                    <div class="small text-secondary mt-2">Para FTP con estos valores: <code id="ftp-forwarding-summary">—</code></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           </div>
         </div>
       </section>
@@ -242,17 +352,30 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="modal-body pt-0">
-        <div class="row g-3 align-items-end">
+        <div class="row g-3">
           <div class="col-md-6">
-            <label for="new-user-name" class="form-label small text-secondary mb-1">Crear usuario del sistema</label>
-            <input id="new-user-name" class="form-control" placeholder="usuario_del_sistema" autocomplete="off" />
+            <label for="new-user-name" class="form-label small text-secondary mb-1">Usuario</label>
+            <input id="new-user-name" class="form-control" placeholder="usuario_sftp" autocomplete="off" />
           </div>
           <div class="col-md-6">
-            <label for="new-user-pass" class="form-label small text-secondary mb-1">Contraseña inicial</label>
-            <input id="new-user-pass" type="password" class="form-control" placeholder="mínimo 8 caracteres" autocomplete="new-password" />
+            <label for="new-user-home" class="form-label small text-secondary mb-1">Raíz chroot SFTP</label>
+            <input id="new-user-home" class="form-control" placeholder="/srv/senderman-sftp/usuario_sftp" autocomplete="off" />
+          </div>
+          <div class="col-md-6">
+            <label for="new-user-quota" class="form-label small text-secondary mb-1">Cuota de tamaño</label>
+            <input id="new-user-quota" type="number" min="0" class="form-control" placeholder="0 = sin límite" />
+            <div class="form-text text-secondary">Introduce el límite en bytes. Ejemplo: 1073741824 para 1 GiB.</div>
+          </div>
+          <div class="col-12">
+            <label for="new-user-key" class="form-label small text-secondary mb-1">Clave pública SSH</label>
+            <textarea id="new-user-key" class="form-control" rows="4" placeholder="ssh-ed25519 AAAA... usuario@equipo"></textarea>
+          </div>
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input id="new-user-generate-key" class="form-check-input" type="checkbox" checked />
+            <label for="new-user-generate-key" class="form-check-label small text-secondary">Generar clave SSH automáticamente si no pego una pública</label>
           </div>
         </div>
-        <div class="small text-secondary mt-3">Se creará la cuenta en el sistema con shell deshabilitada y luego se añadirá al registro.</div>
+        <div class="small text-secondary mt-3">Se creará la cuenta con shell deshabilitada y autenticación por clave SSH.</div>
       </div>
       <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -264,10 +387,72 @@
   </div>
 </div>
 
+<!-- Modal edición de usuarios -->
+<div class="modal fade" id="edit-user-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content glass-panel">
+      <div class="modal-header border-0">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-sliders text-info"></i>Editar usuario
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body pt-0">
+        <div class="row g-3">
+          <input type="hidden" id="edit-user-original-name" />
+          <div class="col-md-6">
+            <label for="edit-user-name" class="form-label small text-secondary mb-1">Usuario</label>
+            <input id="edit-user-name" class="form-control" autocomplete="off" />
+          </div>
+          <div class="col-md-6">
+            <label for="edit-user-home" class="form-label small text-secondary mb-1">Raíz chroot SFTP</label>
+            <input id="edit-user-home" class="form-control" autocomplete="off" />
+          </div>
+          <div class="col-md-6">
+            <label for="edit-user-quota" class="form-label small text-secondary mb-1">Cuota de tamaño</label>
+            <input id="edit-user-quota" type="number" min="0" class="form-control" />
+            <div class="form-text text-secondary">Límite en bytes. Usa 0 para sin límite.</div>
+          </div>
+          <div class="col-12">
+            <label for="edit-user-key" class="form-label small text-secondary mb-1">Clave pública SSH</label>
+            <textarea id="edit-user-key" class="form-control" rows="5"></textarea>
+          </div>
+          <div class="col-12 d-flex flex-wrap gap-3">
+            <label class="form-check-label d-flex align-items-center gap-2">
+              <input id="edit-user-locked" class="form-check-input" type="checkbox" />
+              Bloqueado
+            </label>
+            <label class="form-check-label d-flex align-items-center gap-2">
+              <input id="edit-user-write" class="form-check-input" type="checkbox" />
+              Escritura habilitada
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0 d-flex justify-content-between flex-wrap gap-2">
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-danger" id="delete-user-btn" data-action="delete-user">
+            <i class="bi bi-trash3 me-1"></i>Eliminar
+          </button>
+          <button type="button" class="btn btn-outline-secondary" id="generate-user-key-btn" data-action="generate-user-key">
+            <i class="bi bi-key me-1"></i>Generar clave
+          </button>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-action service-btn service-restart px-4" id="save-user-btn" data-action="save-user">
+            <i class="bi bi-check2-circle me-1"></i>Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toast-container"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/app.js"></script>
+<script src="/static/js/app.js?v=20260809d"></script>
 </body>
 </html>

@@ -28,6 +28,33 @@ function toast(msg, type = 'success') {
   setTimeout(() => document.getElementById(id)?.remove(), 3500);
 }
 
+function showUninstallShutdown() {
+  const overlay = document.getElementById('uninstall-shutdown');
+  const countdown = document.getElementById('uninstall-countdown');
+  if (!overlay || !countdown) return;
+
+  overlay.classList.remove('d-none');
+  document.querySelectorAll('button, input, a').forEach(element => {
+    element.setAttribute('disabled', 'disabled');
+  });
+
+  let remaining = 10;
+  countdown.textContent = remaining;
+  const timer = window.setInterval(() => {
+    remaining -= 1;
+    countdown.textContent = remaining;
+    if (remaining > 0) return;
+
+    window.clearInterval(timer);
+    window.close();
+    window.setTimeout(() => {
+      window.open('', '_self');
+      window.close();
+      window.setTimeout(() => window.location.replace('about:blank'), 250);
+    }, 150);
+  }, 1000);
+}
+
 function setActiveTab(name) {
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === name);
@@ -35,7 +62,7 @@ function setActiveTab(name) {
 }
 
 function switchTab(name) {
-  ['activity', 'users', 'files'].forEach(tab => {
+  ['activity', 'users', 'files', 'maintenance'].forEach(tab => {
     document.getElementById(`tab-${tab}`).classList.add('d-none');
   });
   document.getElementById(`tab-${name}`).classList.remove('d-none');
@@ -46,6 +73,10 @@ function switchTab(name) {
 
 function escapeAttr(value) {
   return escapeHtml(String(value)).replace(/'/g, '&#39;');
+}
+
+function apiUrl(path) {
+  return new URL(path, window.location.origin).toString();
 }
 
 function normalizeFilesPath(path) {
@@ -116,7 +147,7 @@ function clearLog() {
 
 async function refreshAll() {
   try {
-    const response = await fetch('/api/status');
+    const response = await fetch(apiUrl('/api/status'));
     if (!response.ok) return;
     const data = await response.json();
 
@@ -140,6 +171,7 @@ async function refreshAll() {
     }
 
     renderUserRegistry(data.users || []);
+    renderMaintenancePanel(data.maintenance || {});
 
     const startBtn = document.getElementById('service-start-btn');
     const stopBtn = document.getElementById('service-stop-btn');
@@ -176,6 +208,61 @@ async function refreshAll() {
   }
 }
 
+let ftpAutoSyncInFlight = false;
+
+function renderMaintenancePanel(state) {
+  const installed = document.getElementById('maintenance-installed');
+  const release = document.getElementById('maintenance-release');
+  const root = document.getElementById('maintenance-root');
+  const service = document.getElementById('maintenance-service');
+
+  if (installed) installed.textContent = state.installed ? 'Sí' : 'No';
+  if (release) release.textContent = state.release || '—';
+  if (root) root.textContent = state.install_root || '—';
+  if (service) service.textContent = state.service?.active ? 'Activo' : 'Detenido';
+  loadFtpConfig();
+}
+
+async function loadFtpConfig() {
+  try {
+    const response = await fetch(apiUrl('/api/ftp-config'));
+    if (!response.ok) return;
+    const config = await response.json();
+    document.getElementById('ftp-public-ip').value = config.public_ip || config.detected_public_ip || '';
+    document.getElementById('ftp-control-port').value = config.control_port || 21;
+    document.getElementById('ftp-passive-min').value = config.passive_min_port || 40404;
+    document.getElementById('ftp-passive-max').value = config.passive_max_port || 40404;
+    document.getElementById('ftp-detected-ip').textContent = config.detected_public_ip ? `Detectada: ${config.detected_public_ip}` : 'No se pudo detectar automáticamente';
+    document.getElementById('ftp-forwarding-summary').textContent = `TCP ${config.control_port || 21} y TCP ${config.passive_min_port || 40404}-${config.passive_max_port || 40404} -> este equipo`;
+
+    if (config.detected_public_ip && config.detected_public_ip !== config.public_ip && !ftpAutoSyncInFlight) {
+      ftpAutoSyncInFlight = true;
+      document.getElementById('ftp-detected-ip').textContent = `Cambio detectado: actualizando a ${config.detected_public_ip}...`;
+      await saveFtpConfig(config.detected_public_ip, true);
+      ftpAutoSyncInFlight = false;
+    }
+  } catch (error) {
+    console.error(error);
+    ftpAutoSyncInFlight = false;
+  }
+}
+
+async function saveFtpConfig(publicIp = null, automatic = false) {
+  const payload = {
+    public_ip: publicIp || document.getElementById('ftp-public-ip').value.trim(),
+    control_port: Number(document.getElementById('ftp-control-port').value),
+    passive_min_port: Number(document.getElementById('ftp-passive-min').value),
+    passive_max_port: Number(document.getElementById('ftp-passive-max').value),
+  };
+  const response = await fetch(apiUrl('/api/ftp-config'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.detail || 'No se pudo guardar la configuración FTP');
+  toast(automatic ? 'IP pública actualizada automáticamente' : 'Configuración FTP aplicada y servicio reiniciado', 'success');
+  const config = result.config || {};
+  document.getElementById('ftp-public-ip').value = config.public_ip || payload.public_ip;
+  document.getElementById('ftp-detected-ip').textContent = config.detected_public_ip ? `Detectada: ${config.detected_public_ip}` : 'No se pudo detectar automáticamente';
+}
+
 function applyTheme(theme) {
   const body = document.body;
   const icon = document.getElementById('theme-icon');
@@ -194,7 +281,7 @@ function toggleTheme() {
 async function serviceAction(action) {
   const labels = { start: 'Iniciando', stop: 'Deteniendo', restart: 'Reiniciando' };
   try {
-    const response = await fetch(`/api/service/${action}`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/service/${action}`), { method: 'POST' });
     if (response.ok) {
       toast(`${labels[action]} vsftpd...`, 'info');
       setTimeout(refreshAll, 1500);
@@ -207,24 +294,270 @@ async function serviceAction(action) {
   }
 }
 
+async function maintenanceAction(action) {
+  const labels = {
+    'maintenance-install': 'Instalando',
+    'maintenance-update': 'Actualizando',
+    'maintenance-uninstall': 'Desinstalando',
+  };
+
+  try {
+    if (action === 'maintenance-uninstall') {
+      const keepConfig = document.getElementById('maintenance-keep-config')?.checked ?? true;
+      const confirmed = window.confirm(`¿Seguro que quieres desinstalar Senderman?${keepConfig ? ' Se conservará la configuración local.' : ' Se eliminará también la configuración local.'}`);
+      if (!confirmed) return;
+
+      const response = await fetch(apiUrl(`/api/maintenance/uninstall?keep_config=${keepConfig ? 'true' : 'false'}`), { method: 'POST' });
+      if (response.ok) {
+        showUninstallShutdown();
+        return;
+      }
+      const error = await response.json().catch(() => ({}));
+      toast(error.detail || 'Error', 'danger');
+      return;
+    }
+
+    const endpoint = action === 'maintenance-install' ? '/api/maintenance/install' : '/api/maintenance/update';
+    const response = await fetch(apiUrl(endpoint), { method: 'POST' });
+    if (response.ok) {
+      toast(`${labels[action]} Senderman...`, 'info');
+      setTimeout(refreshAll, 1500);
+      return;
+    }
+    const error = await response.json().catch(() => ({}));
+    toast(error.detail || 'Error', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+function downloadTextFile(filename, content, mimeType = 'text/plain') {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function openUserModal(modalId) {
+  return bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId));
+}
+
+function fillEditModal(user) {
+  document.getElementById('edit-user-original-name').value = user.username || '';
+  document.getElementById('edit-user-name').value = user.username || '';
+  document.getElementById('edit-user-home').value = user.home_dir || '';
+  document.getElementById('edit-user-key').value = user.public_key || '';
+  document.getElementById('edit-user-quota').value = Number(user.quota_bytes || 0);
+  document.getElementById('edit-user-locked').checked = !!user.locked;
+  document.getElementById('edit-user-write').checked = !!user.write_enabled;
+}
+
+async function loadUserForEdit(username) {
+  const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}`));
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'No se pudo cargar el usuario');
+  }
+  return response.json();
+}
+
+function resetCreateForm() {
+  const nameInput = document.getElementById('new-user-name');
+  const homeInput = document.getElementById('new-user-home');
+  const quotaInput = document.getElementById('new-user-quota');
+  const keyInput = document.getElementById('new-user-key');
+  const generateInput = document.getElementById('new-user-generate-key');
+  if (nameInput) nameInput.value = '';
+  if (homeInput) homeInput.value = '';
+  if (quotaInput) quotaInput.value = '0';
+  if (keyInput) keyInput.value = '';
+  if (generateInput) generateInput.checked = true;
+}
+
+async function registerUser() {
+  const input = document.getElementById('new-user-name');
+  const homeInput = document.getElementById('new-user-home');
+  const quotaInput = document.getElementById('new-user-quota');
+  const publicKeyInput = document.getElementById('new-user-key');
+  const generateInput = document.getElementById('new-user-generate-key');
+  const modalElement = document.getElementById('register-user-modal');
+  const modal = bootstrap.Modal.getInstance(modalElement);
+  const username = input.value.trim();
+  const homeDir = homeInput.value.trim();
+  const quotaBytes = Number(quotaInput.value || 0);
+  const publicKey = publicKeyInput.value.trim();
+  const generateKeypair = !!generateInput.checked;
+
+  if (!username) {
+    toast('Escribe un nombre de usuario', 'danger');
+    return;
+  }
+  if (!publicKey && !generateKeypair) {
+    toast('Pega una clave pública o activa la generación automática', 'danger');
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl('/api/users/create'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, home_dir: homeDir, quota_bytes: quotaBytes, public_key: publicKey, generate_keypair: generateKeypair }),
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      input.value = '';
+      homeInput.value = '';
+      quotaInput.value = '0';
+      publicKeyInput.value = '';
+      generateInput.checked = true;
+      toast('Usuario registrado en el panel', 'success');
+      if (payload.private_key) {
+        downloadTextFile(`${username}-sftp.key`, payload.private_key);
+        toast('La clave privada se descargó automáticamente', 'info');
+      }
+      if (modal) modal.hide();
+      refreshAll();
+      return;
+    }
+    const error = await response.json();
+    toast(error.detail || 'Error al registrar', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function openEditUserModal(username, options = {}) {
+  try {
+    const user = await loadUserForEdit(username);
+    fillEditModal(user);
+    openUserModal('edit-user-modal').show();
+    if (options.generateKey) {
+      setTimeout(() => generateUserKeyForUser(username), 250);
+    }
+  } catch (error) {
+    toast(error.message || 'No se pudo cargar el usuario', 'danger');
+  }
+}
+
+async function saveEditedUser() {
+  const originalName = document.getElementById('edit-user-original-name').value.trim();
+  const newName = document.getElementById('edit-user-name').value.trim();
+  const homeDir = document.getElementById('edit-user-home').value.trim();
+  const quotaBytes = Number(document.getElementById('edit-user-quota').value || 0);
+  const publicKey = document.getElementById('edit-user-key').value.trim();
+  const locked = document.getElementById('edit-user-locked').checked;
+  const writeEnabled = document.getElementById('edit-user-write').checked;
+  const modal = bootstrap.Modal.getInstance(document.getElementById('edit-user-modal'));
+
+  try {
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(originalName)}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        new_username: newName,
+        home_dir: homeDir,
+        quota_bytes: quotaBytes,
+        public_key: publicKey,
+        locked,
+        write_enabled: writeEnabled,
+      }),
+    });
+
+    if (response.ok) {
+      toast('Usuario actualizado', 'success');
+      if (modal) modal.hide();
+      refreshAll();
+      return;
+    }
+
+    const error = await response.json();
+    toast(error.detail || 'No se pudo guardar el usuario', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function deleteUserByName(username) {
+  const confirmed = window.confirm(`¿Eliminar al usuario ${username}?`);
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}?remove_home=true`), { method: 'DELETE' });
+    if (response.ok) {
+      toast('Usuario eliminado', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('edit-user-modal'))?.hide();
+      refreshAll();
+      return;
+    }
+    const error = await response.json();
+    toast(error.detail || 'No se pudo eliminar el usuario', 'danger');
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function deleteEditedUser() {
+  const originalName = document.getElementById('edit-user-original-name').value.trim();
+  return deleteUserByName(originalName);
+}
+
+async function generateUserKeyForUser(username) {
+  try {
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}/keys/generate`), { method: 'POST' });
+    if (!response.ok) {
+      const error = await response.json();
+      toast(error.detail || 'No se pudo generar la clave', 'danger');
+      return;
+    }
+
+    const payload = await response.json();
+    const keyInput = document.getElementById('edit-user-key');
+    if (document.getElementById('edit-user-original-name').value.trim() === username && keyInput) {
+      keyInput.value = payload.public_key || '';
+    }
+    if (payload.private_key) {
+      downloadTextFile(`${username}-sftp.key`, payload.private_key);
+      toast('La clave privada se descargó automáticamente', 'info');
+    }
+    refreshAll();
+  } catch (error) {
+    toast('Error de red', 'danger');
+  }
+}
+
+async function generateUserKeyForEdit() {
+  const originalName = document.getElementById('edit-user-original-name').value.trim();
+  return generateUserKeyForUser(originalName);
+}
+
 function renderUserRegistry(users) {
   const tbody = document.getElementById('users-registry-tbody');
   if (!tbody) return;
 
   if (!users.length) {
-    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-secondary py-4"><i class="bi bi-people fs-3 d-block mb-2"></i>Sin usuarios registrados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-secondary py-4"><i class="bi bi-people fs-3 d-block mb-2"></i>Sin usuarios registrados</td></tr>`;
     return;
   }
 
   tbody.innerHTML = users.map(user => {
     const locked = !!user.locked;
     const writeEnabled = !!user.write_enabled;
+    const quotaBytes = Number(user.quota_bytes || 0);
     const stateIcon = locked ? 'bi-lock-fill' : 'bi-unlock-fill';
     const writeIcon = writeEnabled ? 'bi-pencil-square' : 'bi-file-lock2-fill';
+    const quotaLabel = quotaBytes > 0 ? `Cuota: ${formatBytes(quotaBytes)}` : 'Cuota: sin límite';
 
     return `
       <tr class="connected-row">
-        <td><i class="bi bi-person-fill text-info me-1"></i><code>${escapeHtml(user.username)}</code></td>
+        <td>
+          <i class="bi bi-person-fill text-info me-1"></i><code>${escapeHtml(user.username)}</code>
+          <div class="small text-secondary">${escapeHtml(quotaLabel)}</div>
+        </td>
         <td class="cell-center">
           <button class="btn btn-sm btn-action user-action-btn user-registry-toggle ${locked ? 'toggle-blocked' : 'toggle-active'}" type="button" data-user-action="${locked ? 'unlock' : 'lock'}" data-username="${escapeHtml(user.username)}">
             <i class="bi ${stateIcon}"></i>
@@ -237,13 +570,26 @@ function renderUserRegistry(users) {
             <span class="toggle-label">${writeEnabled ? 'ON' : 'OFF'}</span>
           </button>
         </td>
+        <td class="text-end">
+          <div class="d-flex justify-content-end gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-info btn-action" type="button" data-action="edit-user" data-username="${escapeHtml(user.username)}">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary btn-action" type="button" data-action="generate-key" data-username="${escapeHtml(user.username)}">
+              <i class="bi bi-key"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger btn-action" type="button" data-action="delete-user" data-username="${escapeHtml(user.username)}">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </div>
+        </td>
       </tr>`;
   }).join('');
 }
 
 async function userAction(username, action) {
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(username)}/${action}`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}/${action}`), { method: 'POST' });
     if (response.ok) {
       toast(action === 'lock' ? 'Usuario bloqueado' : 'Usuario desbloqueado', action === 'lock' ? 'danger' : 'success');
       refreshAll();
@@ -258,7 +604,7 @@ async function userAction(username, action) {
 
 async function userWriteAction(username, state) {
   try {
-    const response = await fetch(`/api/users/${encodeURIComponent(username)}/write/${state}`, { method: 'POST' });
+    const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(username)}/write/${state}`), { method: 'POST' });
     if (response.ok) {
       toast(state === 'on' ? 'Escritura habilitada' : 'Escritura deshabilitada', state === 'on' ? 'success' : 'info');
       refreshAll();
@@ -273,45 +619,8 @@ async function userWriteAction(username, state) {
 
 function openRegisterModal() {
   const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('register-user-modal'));
+  resetCreateForm();
   modal.show();
-}
-
-async function registerUser() {
-  const input = document.getElementById('new-user-name');
-  const passwordInput = document.getElementById('new-user-pass');
-  const modalElement = document.getElementById('register-user-modal');
-  const modal = bootstrap.Modal.getInstance(modalElement);
-  const username = input.value.trim();
-  const password = passwordInput.value;
-
-  if (!username) {
-    toast('Escribe un nombre de usuario', 'danger');
-    return;
-  }
-  if (!password || password.length < 8) {
-    toast('La contraseña debe tener al menos 8 caracteres', 'danger');
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/users/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (response.ok) {
-      input.value = '';
-      passwordInput.value = '';
-      toast('Usuario registrado en el panel', 'success');
-      if (modal) modal.hide();
-      refreshAll();
-      return;
-    }
-    const error = await response.json();
-    toast(error.detail || 'Error al registrar', 'danger');
-  } catch (error) {
-    toast('Error de red', 'danger');
-  }
 }
 
 async function loadFiles(path = currentFilesPath) {
@@ -319,7 +628,7 @@ async function loadFiles(path = currentFilesPath) {
   tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary py-3">Cargando...</td></tr>';
   try {
     const normalizedPath = normalizeFilesPath(path);
-    const response = await fetch(`/api/files?path=${encodeURIComponent(normalizedPath)}`);
+    const response = await fetch(apiUrl(`/api/files?path=${encodeURIComponent(normalizedPath)}`));
     if (!response.ok) throw new Error('files');
     const payload = await response.json();
     const files = payload.entries || [];
@@ -377,7 +686,7 @@ async function loadFiles(path = currentFilesPath) {
 
 async function downloadFile(path) {
   try {
-    const response = await fetch(`/api/files/download?path=${encodeURIComponent(path)}`);
+    const response = await fetch(apiUrl(`/api/files/download?path=${encodeURIComponent(path)}`));
     if (!response.ok) throw new Error('download');
     const blob = await response.blob();
     const contentDisposition = response.headers.get('content-disposition') || '';
@@ -408,7 +717,7 @@ async function uploadItems(items) {
   });
 
   try {
-    const response = await fetch(`/api/files/upload?path=${encodeURIComponent(currentFilesPath)}`, {
+    const response = await fetch(apiUrl(`/api/files/upload?path=${encodeURIComponent(currentFilesPath)}`), {
       method: 'POST',
       body: formData,
     });
@@ -539,6 +848,29 @@ function bindUI() {
     button.addEventListener('click', () => serviceAction(button.dataset.serviceAction));
   });
 
+  document.querySelectorAll('[data-action="maintenance-install"]').forEach(button => {
+    button.addEventListener('click', () => maintenanceAction('maintenance-install'));
+  });
+
+  document.querySelectorAll('[data-action="maintenance-update"]').forEach(button => {
+    button.addEventListener('click', () => maintenanceAction('maintenance-update'));
+  });
+
+  document.querySelectorAll('[data-action="maintenance-uninstall"]').forEach(button => {
+    button.addEventListener('click', () => maintenanceAction('maintenance-uninstall'));
+  });
+  document.querySelectorAll('[data-action="save-ftp-config"]').forEach(button => {
+    button.addEventListener('click', () => saveFtpConfig().catch(error => toast(error.message, 'danger')));
+  });
+
+  document.querySelectorAll('[data-action="go-monitor"]').forEach(button => {
+    button.addEventListener('click', () => switchTab('activity'));
+  });
+
+  document.getElementById('save-user-btn')?.addEventListener('click', saveEditedUser);
+  document.getElementById('delete-user-btn')?.addEventListener('click', deleteEditedUser);
+  document.getElementById('generate-user-key-btn')?.addEventListener('click', generateUserKeyForEdit);
+
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.addEventListener('click', () => switchTab(button.dataset.tab));
   });
@@ -558,6 +890,24 @@ function bindUI() {
   }
 
   document.addEventListener('click', event => {
+    const editButton = event.target.closest('button[data-action="edit-user"]');
+    if (editButton) {
+      openEditUserModal(editButton.dataset.username || '');
+      return;
+    }
+
+    const generateButton = event.target.closest('button[data-action="generate-key"]');
+    if (generateButton) {
+      openEditUserModal(generateButton.dataset.username || '', { generateKey: true });
+      return;
+    }
+
+    const deleteButton = event.target.closest('button[data-action="delete-user"]');
+    if (deleteButton && deleteButton.dataset.username) {
+      deleteUserByName(deleteButton.dataset.username);
+      return;
+    }
+
     const openButton = event.target.closest('button[data-action="open-folder"]');
     if (openButton) {
       const nextPath = normalizeFilesPath(openButton.dataset.path || '');

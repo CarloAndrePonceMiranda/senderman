@@ -1,6 +1,6 @@
 # Senderman FTP Admin
 
-Panel web de administración para el servidor FTPS/SFTP **vsftpd** en `senderman`.  
+Panel web de administración para el servidor SFTP por clave SSH y el servicio **vsftpd** en `senderman`.  
 Construido con **FastAPI + WebSockets + Bootstrap 5 Dark**.
 
 ## Despliegue rápido
@@ -11,15 +11,16 @@ Resumen rápido:
 
 1. Clona el repositorio y entra al directorio.
 2. Ejecuta `bash install.sh --service` si quieres dejarlo como servicio, o `bash install.sh` si prefieres abrir el menú interactivo. El instalador copia la app a `/opt/senderman-ftp-admin` por defecto y deja `files/` dentro de esa ruta, aunque puedes cambiar `FILES_DIR` en `.env`. Por defecto instala el tag más reciente; si quieres otra versión, usa `--release <tag>` o `--choose-release`.
-3. Durante la instalación el instalador prepara únicamente el servidor.
+3. Durante la instalación el instalador prepara el panel, crea el grupo SFTP dedicado y deja `sshd` configurado para aceptar solo claves públicas en ese grupo.
 4. Revisa `.env` y ajusta `ADMIN_PASS` si hace falta; si no existe, `install.sh` lo crea por ti.
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Cuando la instalación termina, el menú de aplicaciones incluye solo dos accesos directos:
+Cuando la instalación termina, el menú de aplicaciones incluye un acceso directo:
 
-- `Senderman APP`: abre la aplicación web y, si el panel no está arriba, la levanta antes de abrir el navegador.
-- `Senderman Tools`: abre `./install.sh` para instalación, actualización, reinstalación y ajustes de configuración. Desde ahí eliges entre el menú del instalador y el menú de administración de Senderman.
+- `Senderman`: abre la aplicación web y, si el panel no está arriba, la levanta antes de abrir el navegador.
+
+La actualización, desinstalación y el monitor de actividad ya se gestionan desde la pestaña **Mantenimiento** dentro del panel web.
 
 Además, el instalador deja disponible el comando `senderman-sftp` en consola para abrir ese mismo menú de SFTP/servicio desde terminal.
 
@@ -35,7 +36,8 @@ Antes de publicar una versión, ejecuta tu comprobación privada de release para
 - `senderman_registry.sqlite3`, `users.json` heredado, `panel.log` y `backups/` siguen fuera de Git.
 - El panel puede arrancar manualmente o como servicio systemd.
 - `install.sh` es el instalador recomendado para otros equipos.
-- `Senderman APP` y `Senderman Tools` son los dos accesos que instala el script en el menú de aplicaciones, cada uno con su propio icono.
+- El script instala un único acceso visible en el menú de aplicaciones: `Senderman`.
+- La pestaña **Mantenimiento** concentra actualización, desinstalación y monitor.
 - `tools/update.sh` instala el tag más reciente y permite elegir otro tag publicado.
 
 ## Flujo de ramas y tags
@@ -56,8 +58,10 @@ Si quieres forzar el tipo de release de forma manual, usa el workflow `Release m
 ## Qué incluye
 
 - Estado del servicio y control de `vsftpd`.
-- Registro de usuarios del sistema desde la UI.
+- Registro de usuarios SFTP por clave SSH desde la UI.
 - Bloqueo/desbloqueo y escritura por usuario.
+- Edición de usuario, clave pública, directorio de inicio y eliminación.
+- Cuotas de tamaño por usuario, guardadas en bytes y aplicadas si el sistema tiene `setquota` disponible.
 - Usuarios conectados y actividad en vivo.
 - Explorador de archivos con navegación por subcarpetas, drag-and-drop y descarga por archivo/carpeta.
 
@@ -131,8 +135,9 @@ bash install.sh --server
 
 Al terminar, el menú de aplicaciones muestra dos entradas:
 
-- `Senderman APP` para el panel web.
-- `Senderman Tools` para actualización, reinstalación y desinstalación.
+- `Senderman` para el panel web.
+
+La pestaña **Mantenimiento** del panel concentra actualización, reinstalación, desinstalación y monitor.
 
 Si prefieres hacerlo manualmente:
 
@@ -173,6 +178,8 @@ Variables disponibles:
 | `VSFTPD_CONF` | Ruta del archivo de configuración de `vsftpd` |
 | `FILES_DIR` | Carpeta compartida |
 | `FTP_USER` | Usuario principal administrado por el panel |
+
+Si quieres que las cuotas se apliquen de verdad en Linux, instala y habilita soporte de cuotas en el filesystem donde vive `SFTP_ROOT_DIR` y asegúrate de tener `setquota` disponible.
 
 ---
 
@@ -360,7 +367,7 @@ bash tools/app.sh
 
 El launcher intenta abrir el navegador en pantalla completa si encuentra uno compatible y, si el panel no está activo, lo inicia antes de abrir la web.
 
-Si quieres acceso con doble clic, puedes usar [Senderman APP](senderman-app.desktop) o [Senderman Tools](senderman-tools.desktop) como lanzadores gráficos.
+Si quieres acceso con doble clic, usa [Senderman](senderman.desktop) como lanzador gráfico.
 
 ---
 
