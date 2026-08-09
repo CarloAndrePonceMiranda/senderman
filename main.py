@@ -918,8 +918,8 @@ async def api_delete_user(username: str, remove_home: bool = True, _: str = Depe
     if code != 0:
         raise HTTPException(status_code=500, detail=err or "No se pudo eliminar el usuario")
 
-    _remove_sftp_jail(username)
-
+    if remove_home:
+        _remove_sftp_jail(username)
     _delete_user_registry(username)
     return {"ok": True, "username": username}
 
