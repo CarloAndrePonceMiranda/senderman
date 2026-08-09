@@ -149,6 +149,14 @@ PY
   fi
   repo_root="$install_root"
   cd "$repo_root"
+  # Ensure scripts referenced in sudoers rules are owned by root so
+  # the service user cannot modify them and escalate privileges.
+  for _script in "$install_root/install.sh" "$install_root/tools/update.sh"; do
+    if [ -f "$_script" ]; then
+      sudo chown root:root "$_script"
+      sudo chmod 755 "$_script"
+    fi
+  done
 }
 
 detect_ssh_service_name() {
