@@ -122,8 +122,6 @@ bash tools/app.sh
 
 Ese comando intenta abrir el navegador en pantalla completa con un navegador compatible y, si no lo encuentra, usa el navegador por defecto.
 
-Si prefieres un acceso gráfico, instala el acceso [Senderman](senderman.desktop) en el escritorio o en el menú de aplicaciones.
-
 ## Checklist final
 
 - `master` es la rama principal.

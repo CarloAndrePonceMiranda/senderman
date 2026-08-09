@@ -972,7 +972,7 @@ async def api_user_action(username: str, action: str, _: str = Depends(verify)):
     if action not in ("lock", "unlock"):
         raise HTTPException(status_code=400)
     flag = "-L" if action == "lock" else "-U"
-    code, _, err = run(["sudo", "usermod", flag, username])
+    code, _, err = run_sudo(["usermod", flag, username], ADMIN_PASS)
     if code != 0:
         raise HTTPException(status_code=500, detail=err)
 

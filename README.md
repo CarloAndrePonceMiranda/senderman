@@ -16,7 +16,7 @@ Resumen rápido:
 5. Si no usaste `--service`, arranca el panel con `nohup .venv/bin/python main.py > panel.log 2>&1 &`.
 6. Abre `http://localhost:8080` y verifica el estado del servicio.
 
-Cuando la instalación termina, el menú de aplicaciones incluye solo dos accesos directos:
+Cuando la instalación termina, el menú de aplicaciones incluye un acceso directo:
 
 - `Senderman`: abre la aplicación web y, si el panel no está arriba, la levanta antes de abrir el navegador.
 
