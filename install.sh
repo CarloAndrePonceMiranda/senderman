@@ -754,7 +754,9 @@ uninstall_application() {
 
   remove_console_launchers
   remove_desktop_shortcuts
-  remove_sftp_daemon_config
+  if ! $uninstall_keep_config; then
+    remove_sftp_daemon_config
+  fi
 
   if command -v sudo >/dev/null 2>&1; then
     if systemctl list-unit-files | grep -q '^senderman-ftp-admin\.service'; then
