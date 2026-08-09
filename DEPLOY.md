@@ -27,7 +27,7 @@ Si prefieres instalar sin habilitar el servicio aún:
 bash install.sh
 ```
 
-Al final de la instalación quedan dos accesos en el menú de aplicaciones:
+Al final de la instalación queda un acceso en el menú de aplicaciones:
 
 - `Senderman`: abre la web.
 
@@ -122,7 +122,6 @@ bash tools/app.sh
 
 Ese comando intenta abrir el navegador en pantalla completa con un navegador compatible y, si no lo encuentra, usa el navegador por defecto.
 
-Si prefieres un acceso gráfico, instala el acceso [Senderman](senderman.desktop) en el escritorio o en el menú de aplicaciones.
 Si prefieres un acceso gráfico, instala el acceso [Senderman](senderman.desktop) en el escritorio o en el menú de aplicaciones.
 
 ## Checklist final

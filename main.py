@@ -253,7 +253,7 @@ def _install_public_key(username: str, public_key_text: str) -> None:
 
 
 def _ensure_sftp_group_membership(username: str) -> None:
-    code, _, err = run_sudo(["usermod", "-g", SFTP_GROUP, username], ADMIN_PASS)
+    code, _, err = run_sudo(["usermod", "-aG", SFTP_GROUP, username], ADMIN_PASS)
     if code != 0:
         raise HTTPException(status_code=500, detail=err or "No se pudo asignar el grupo SFTP")
 
@@ -520,7 +520,7 @@ def get_user_registry() -> list[dict]:
         _ensure_registry_db(conn)
         rows = conn.execute(
             """
-            SELECT username, locked, write_enabled, home_dir, public_key, protocol
+            SELECT username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol
             FROM user_registry
             ORDER BY CASE WHEN username = ? THEN 0 ELSE 1 END, username
             """,
@@ -538,7 +538,7 @@ def _update_user_registry(username: str, updater) -> list[dict]:
     with _open_registry_db() as conn:
         _ensure_registry_db(conn)
         row = conn.execute(
-            "SELECT username, locked, write_enabled, home_dir, public_key, protocol FROM user_registry WHERE username = ?",
+            "SELECT username, locked, write_enabled, home_dir, public_key, quota_bytes, protocol FROM user_registry WHERE username = ?",
             (username,),
         ).fetchone()
         current = _row_to_user(row) if row is not None else _default_user_record(username, write_enabled=False)
@@ -825,8 +825,8 @@ async def api_update_user(username: str, request: Request, _: str = Depends(veri
 
     if locked is not None:
         desired_locked = bool(locked)
-        lock_command = ["sudo", "usermod", "-L" if desired_locked else "-U", registry_username]
-        code, _, err = run(lock_command)
+        lock_command = ["usermod", "-L" if desired_locked else "-U", registry_username]
+        code, _, err = run_sudo(lock_command, ADMIN_PASS)
         if code != 0:
             raise HTTPException(status_code=500, detail=err or "No se pudo cambiar el estado del usuario")
 

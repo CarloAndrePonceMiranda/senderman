@@ -238,7 +238,7 @@ async function maintenanceAction(action) {
         toast('Desinstalación iniciada', 'info');
         return;
       }
-      const error = await response.json();
+      const error = await response.json().catch(() => ({}));
       toast(error.detail || 'Error', 'danger');
       return;
     }
@@ -250,7 +250,7 @@ async function maintenanceAction(action) {
       setTimeout(refreshAll, 1500);
       return;
     }
-    const error = await response.json();
+    const error = await response.json().catch(() => ({}));
     toast(error.detail || 'Error', 'danger');
   } catch (error) {
     toast('Error de red', 'danger');
@@ -466,7 +466,7 @@ function renderUserRegistry(users) {
   if (!tbody) return;
 
   if (!users.length) {
-    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-secondary py-4"><i class="bi bi-people fs-3 d-block mb-2"></i>Sin usuarios registrados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-secondary py-4"><i class="bi bi-people fs-3 d-block mb-2"></i>Sin usuarios registrados</td></tr>`;
     return;
   }
 
