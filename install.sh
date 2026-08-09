@@ -915,15 +915,15 @@ mode, selector = sys.argv[1:3]
 
 
 def repo_slug() -> str:
-    try:
-      remote_url = subprocess.run(
-        ["git", "remote", "get-url", "origin"],
-        check=True,
-        text=True,
-        capture_output=True,
-      ).stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-      return "CarloAndrePonceMiranda/senderman"
+	try:
+		remote_url = subprocess.run(
+			["git", "remote", "get-url", "origin"],
+			check=True,
+			text=True,
+			capture_output=True,
+		).stdout.strip()
+	except (subprocess.CalledProcessError, FileNotFoundError):
+		return "CarloAndrePonceMiranda/senderman"
 
 	prefixes = {
 		"https://github.com/": "",

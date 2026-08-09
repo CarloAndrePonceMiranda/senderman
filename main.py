@@ -326,7 +326,8 @@ def get_maintenance_state() -> dict:
 async def run_maintenance_command(args: list[str]) -> dict:
     script_args = list(args)
     if script_args[:1] == ["bash"] and len(script_args) > 1:
-        script_args[1] = str(APP_ROOT / script_args[1])
+        script_args = script_args[1:]
+        script_args[0] = str(APP_ROOT / script_args[0])
     command = ["sudo", "-n", "/usr/bin/bash", *script_args]
     proc = await asyncio.create_subprocess_exec(
         *command,
