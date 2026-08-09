@@ -324,13 +324,28 @@ def get_maintenance_state() -> dict:
 
 
 async def run_maintenance_command(args: list[str]) -> dict:
+    script_args = list(args)
+    if script_args[:1] == ["bash"] and len(script_args) > 1:
+        script_args = script_args[1:]
+        script_args[0] = str(APP_ROOT / script_args[0])
+    command = ["sudo", "-n", "/usr/bin/bash", *script_args]
     proc = await asyncio.create_subprocess_exec(
-        *args,
+        *command,
         cwd=str(APP_ROOT),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return {
+            "ok": False,
+            "returncode": 124,
+            "stdout": "",
+            "stderr": "La operación de mantenimiento superó el límite de 5 minutos",
+        }
     return {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
@@ -1171,6 +1186,8 @@ async def api_maintenance(_: str = Depends(verify)):
 
 @app.post("/api/maintenance/install")
 async def api_maintenance_install(_: str = Depends(verify)):
+    if get_maintenance_state()["installed"]:
+        raise HTTPException(status_code=409, detail="Senderman ya está instalado. Usa Actualizar para instalar una release nueva.")
     result = await run_maintenance_command(["bash", "install.sh", "--service", "--latest-release", "--server"])
     if not result["ok"]:
         raise HTTPException(status_code=500, detail=result["stderr"] or result["stdout"] or "No se pudo completar la instalación")
@@ -1202,7 +1219,7 @@ async def ws_logs(ws: WebSocket):
     await ws.accept()
     try:
         proc = await asyncio.create_subprocess_exec(
-            "sudo", "/usr/local/bin/senderman-log-stream",
+            "sudo", "-n", "/usr/local/bin/senderman-log-stream",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )

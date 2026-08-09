@@ -215,11 +215,16 @@ function renderMaintenancePanel(state) {
   const release = document.getElementById('maintenance-release');
   const root = document.getElementById('maintenance-root');
   const service = document.getElementById('maintenance-service');
+  const installButton = document.querySelector('[data-action="maintenance-install"]');
 
   if (installed) installed.textContent = state.installed ? 'Sí' : 'No';
   if (release) release.textContent = state.release || '—';
   if (root) root.textContent = state.install_root || '—';
   if (service) service.textContent = state.service?.active ? 'Activo' : 'Detenido';
+  if (installButton) {
+    installButton.disabled = Boolean(state.installed);
+    installButton.title = state.installed ? 'Senderman ya está instalado; usa Actualizar' : 'Instalar Senderman';
+  }
   loadFtpConfig();
 }
 
