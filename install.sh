@@ -730,6 +730,9 @@ $service_user ALL=(ALL) /usr/sbin/chpasswd
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/vsftpd.conf
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 50 -f /var/log/vsftpd.log
 $service_user ALL=(ALL) NOPASSWD: /usr/bin/tail -n 500 /var/log/vsftpd.log
+$service_user ALL=(ALL) NOPASSWD: /usr/local/bin/senderman-log-stream
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/bash $install_root/install.sh *
+$service_user ALL=(ALL) NOPASSWD: /usr/bin/bash $install_root/tools/update.sh *
 EOF
   sudo chmod 440 "$sudoers_file"
 
@@ -808,8 +811,7 @@ get_repo_slug() {
       printf '%s' "${remote_url#git@github.com:}" | sed 's/\.git$//'
       ;;
     *)
-      echo "error: no se pudo resolver el repositorio GitHub desde origin: $remote_url"
-      exit 1
+      printf '%s' "${SENDERMAN_REPO_SLUG:-CarloAndrePonceMiranda/senderman}"
       ;;
   esac
 }
@@ -828,12 +830,15 @@ mode, selector = sys.argv[1:3]
 
 
 def repo_slug() -> str:
-  remote_url = subprocess.run(
-    ["git", "remote", "get-url", "origin"],
-    check=True,
-    text=True,
-    capture_output=True,
-  ).stdout.strip()
+  try:
+    remote_url = subprocess.run(
+      ["git", "remote", "get-url", "origin"],
+      check=True,
+      text=True,
+      capture_output=True,
+    ).stdout.strip()
+  except (subprocess.CalledProcessError, FileNotFoundError):
+    return "CarloAndrePonceMiranda/senderman"
 
   prefixes = {
     "https://github.com/": "",
@@ -910,12 +915,15 @@ mode, selector = sys.argv[1:3]
 
 
 def repo_slug() -> str:
-	remote_url = subprocess.run(
-		["git", "remote", "get-url", "origin"],
-		check=True,
-		text=True,
-		capture_output=True,
-	).stdout.strip()
+    try:
+      remote_url = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        check=True,
+        text=True,
+        capture_output=True,
+      ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+      return "CarloAndrePonceMiranda/senderman"
 
 	prefixes = {
 		"https://github.com/": "",
